@@ -1,0 +1,21 @@
+GetBattleInfo, GetBattleInfo
+RotateRight90, MoveBackward
+RotateRight45, DoNothing (ignored)
+GetBattleInfo, DoNothing (ignored)
+GetBattleInfo, MoveBackward
+GetBattleInfo, MoveBackward
+GetBattleInfo, MoveBackward
+GetBattleInfo, MoveBackward
+GetBattleInfo, GetBattleInfo
+GetBattleInfo, MoveBackward
+GetBattleInfo, DoNothing (ignored)
+GetBattleInfo, DoNothing (ignored)
+GetBattleInfo, MoveBackward
+GetBattleInfo, MoveBackward
+GetBattleInfo, RotateRight90
+GetBattleInfo, RotateRight45
+GetBattleInfo, MoveForward
+GetBattleInfo, GetBattleInfo
+GetBattleInfo, MoveForward
+GetBattleInfo, MoveForward
+Tie, reached max steps = 20, player 1 has 1 tanks, player 2 has 1 tanks

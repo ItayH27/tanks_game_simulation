@@ -1,0 +1,82 @@
+body {
+    font-family: sans-serif;
+    background-color: #1e1e1e;
+    color: white;
+    padding: 1em;
+    text-align: center;
+}
+
+#gameBoard {
+    display: inline-block;
+    border: 2px solid #555;
+    background-color: #2e2e2e;
+    margin-top: 1em;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.row {
+    display: flex;
+}
+
+.cell {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #444;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.2em;
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.cell.tank1 {
+    background-color: #5fa2ef;
+    color: white;
+}
+
+.cell.tank2 {
+    background-color: #77ed90;
+    color: white;
+}
+
+.cell.mine {
+    background-color: #ef9797;
+    color: white;
+}
+
+.cell.wall {
+    background-color: #6c757d;
+    color: white;
+}
+
+.cell.weak {
+    background-color: #8a8a8a;
+    color: #ffffff;
+}
+
+.cell.shell {
+    background-color: #ffee91;
+    color: #000000;
+}
+
+.cell.empty {
+    background-color: #f5f5f5;
+}
+
+h1 {
+    margin-bottom: 0.5em;
+    color: #f8f9fa;
+}
+
+.cell.changed {
+    animation: flashChange 0.4s ease-in-out;
+}
+
+@keyframes flashChange {
+    0%   { box-shadow: 0 0 10px 5px yellow; transform: scale(1.05); }
+    50%  { box-shadow: 0 0 10px 8px orange; transform: scale(1.1); }
+    100% { box-shadow: none; transform: scale(1); }
+}
+

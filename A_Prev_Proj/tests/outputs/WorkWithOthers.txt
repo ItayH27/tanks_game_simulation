@@ -1,0 +1,4 @@
+MoveForward, MoveForward
+MoveForward (ignored), MoveForward
+MoveForward (ignored), MoveForward (killed)
+Player 1 won with 1 tanks still alive
