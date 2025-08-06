@@ -5,32 +5,33 @@
 #include <string>
 #include <functional>
 #include <cassert>
-
+#include <utility>
+#include <cstddef>
 #include "TankAlgorithm.h"
 #include "Player.h"
 
-using std::unique_ptr, std::vector, std::string, std::function;
+using std::unique_ptr, std::vector, std::string, std::function, std::move, std::string;
 
 class AlgorithmRegistrar {
     class AlgorithmAndPlayerFactories {
-        std::string so_name;
+        string so_name;
         TankAlgorithmFactory tankAlgorithmFactory;
         PlayerFactory playerFactory;
     public:
-        AlgorithmAndPlayerFactories(const std::string& so_name) : so_name(so_name) {}
+        AlgorithmAndPlayerFactories(const string& so_name) : so_name(so_name) {}
         void setTankAlgorithmFactory(TankAlgorithmFactory&& factory) {
             assert(tankAlgorithmFactory == nullptr);
-            tankAlgorithmFactory = std::move(factory);
+            tankAlgorithmFactory = move(factory);
         }
         void setPlayerFactory(PlayerFactory&& factory) {
             assert(playerFactory == nullptr);
-            playerFactory = std::move(factory);
+            playerFactory = move(factory);
         }
-        const std::string& name() const { return so_name; }
-        std::unique_ptr<Player> createPlayer(int player_index, size_t x, size_t y, size_t max_steps, size_t num_shells) const {
+        const string& name() const { return so_name; }
+        unique_ptr<Player> createPlayer(int player_index, size_t x, size_t y, size_t max_steps, size_t num_shells) const {
             return playerFactory(player_index, x, y, max_steps, num_shells);
         }
-        std::unique_ptr<TankAlgorithm> createTankAlgorithm(int player_index, int tank_index) const {
+        unique_ptr<TankAlgorithm> createTankAlgorithm(int player_index, int tank_index) const {
             return tankAlgorithmFactory(player_index, tank_index);
         }
         bool hasPlayerFactory() const {
@@ -40,21 +41,21 @@ class AlgorithmRegistrar {
             return tankAlgorithmFactory != nullptr;
         }
     };
-    std::vector<AlgorithmAndPlayerFactories> algorithms;
+    vector<AlgorithmAndPlayerFactories> algorithms;
     static AlgorithmRegistrar registrar;
 public:
     static AlgorithmRegistrar& getAlgorithmRegistrar();
-    void createAlgorithmFactoryEntry(const std::string& name) {
+    void createAlgorithmFactoryEntry(const string& name) {
         algorithms.emplace_back(name);
     }
     void addPlayerFactoryToLastEntry(PlayerFactory&& factory) {
-        algorithms.back().setPlayerFactory(std::move(factory));
+        algorithms.back().setPlayerFactory(move(factory));
     }
     void addTankAlgorithmFactoryToLastEntry(TankAlgorithmFactory&& factory) {
-        algorithms.back().setTankAlgorithmFactory(std::move(factory));
+        algorithms.back().setTankAlgorithmFactory(move(factory));
     }
     struct BadRegistrationException {
-        std::string name;
+        string name;
         bool hasName, hasPlayerFactory, hasTankAlgorithmFactory;
     };
     void validateLastRegistration() {
@@ -78,6 +79,6 @@ public:
     auto end() const {
         return algorithms.end();
     }
-    std::size_t count() const { return algorithms.size(); }
+    size_t count() const { return algorithms.size(); }
     void clear() { algorithms.clear(); }
 };

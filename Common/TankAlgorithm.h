@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef TANKALGORITHM_H
-#define TANKALGORITHM_H
-
 #include <memory>
 #include <functional>
 #include "ActionRequest.h"
@@ -18,5 +15,3 @@ public:
 };
 
 using TankAlgorithmFactory = function<unique_ptr<TankAlgorithm>(int player_index, int tank_index)>;
-
-#endif //TANKALGORITHM_H

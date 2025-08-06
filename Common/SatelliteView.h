@@ -1,6 +1,8 @@
 #pragma once
 
-# include <cstddef>
+#include <cstddef>
+
+using std::size_t;
 
 class SatelliteView {
     public:
