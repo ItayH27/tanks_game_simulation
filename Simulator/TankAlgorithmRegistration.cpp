@@ -1,4 +1,4 @@
-#include "Common/TankAlgorithmRegisteration.h"
+#include "common/TankAlgorithmRegisteration.h"
 #include "AlgorithmRegistrar.h"
 
 TankAlgorithmRegistration::TankAlgorithmRegistration(TankAlgorithmFactory factory) {
