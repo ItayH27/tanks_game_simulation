@@ -1,5 +1,5 @@
 #include "Common/PlayerRegistration.h"
-#include "AlgorithmRegistrar.h"
+#include "../sim_include/AlgorithmRegistrar.h"
 
 PlayerRegistration::PlayerRegistration(PlayerFactory factory) {
     auto& regsitrar = AlgorithmRegistrar::getAlgorithmRegistrar();

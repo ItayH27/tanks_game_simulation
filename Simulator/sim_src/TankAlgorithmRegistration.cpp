@@ -1,5 +1,5 @@
 #include "common/TankAlgorithmRegisteration.h"
-#include "AlgorithmRegistrar.h"
+#include "../sim_include/AlgorithmRegistrar.h"
 
 TankAlgorithmRegistration::TankAlgorithmRegistration(TankAlgorithmFactory factory) {
     auto& regsitrar = AlgorithmRegistrar::getAlgorithmRegistrar();

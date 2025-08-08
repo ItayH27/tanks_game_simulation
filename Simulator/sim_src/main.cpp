@@ -1,5 +1,5 @@
 #include <iostream>
-#include "cmd_parser.h"
+#include "../sim_include/cmd_parser.h"
 #include "simulator.h"  // You need to implement this: contains runComparative() and runCompetition()
 
 int main(int argc, char** argv) {
