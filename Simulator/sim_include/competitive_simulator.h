@@ -5,13 +5,24 @@
 #include <unordered_map>
 #include <memory>
 #include <filesystem>
+#include <mutex>  // Required for std::mutex
 #include "AlgorithmRegistrar.h"
 #include "GameManagerRegistration.h"
 #include "AbstractGameManager.h"
 
+/**
+ * @brief Tracks a shared library handle and its usage count.
+ */
+struct SharedLibHandle {
+    void* handle = nullptr;
+    int refCount = 0;
+};
+
 class CompetitiveSimulator {
 public:
     CompetitiveSimulator(bool verbose, size_t numThreads);
+    ~CompetitiveSimulator();
+
     int run(const std::string& mapsFolder,
             const std::string& gameManagerSoPath,
             const std::string& algorithmsFolder);
@@ -33,6 +44,26 @@ private:
     std::unordered_map<std::string, int> scores_;
     std::mutex scoresMutex_; // protect score updates
 
+    /**
+     * @brief Tracks loaded algorithm shared libraries with reference counts.
+     */
+    std::unordered_map<std::string, SharedLibHandle> algoLibHandles_;
+
+    /**
+     * @brief Maps algorithm name to its loaded shared object file path.
+     */
+    std::unordered_map<std::string, std::string> algoNameToPath_;
+
+    /**
+     * @brief Tracks how many scheduled games use each algorithm.
+     */
+    std::unordered_map<std::string, int> algoUsageCounts_;
+
+    /**
+     * @brief Mutex for synchronizing access to algorithm shared library handles and usage.
+     */
+    std::mutex handlesMutex_;
+
     bool loadGameManager(const std::string& soPath);
     bool loadAlgorithms(const std::string& folder);
     bool loadMaps(const std::string& folder, std::vector<std::filesystem::path>& outMaps);
@@ -43,4 +74,14 @@ private:
     void writeOutput(const std::string& outFolder, const std::string& mapFolder, const std::string& gmSoName);
     std::unique_ptr<AbstractGameManager> createGameManager();
     std::string timestamp();
+
+    /**
+     * @brief Helper to decrease refCount and call dlclose if needed.
+     */
+    void releaseAlgorithmLib(const std::string& path);
+
+    /**
+     * @brief Called after each game to track when algorithms can be unloaded.
+     */
+    void decreaseUsageCount(const std::string& algoName);
 };
