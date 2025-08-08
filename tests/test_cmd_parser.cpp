@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../Simulator/cmd_parser.h"
+#include "../Simulator/sim_include/cmd_parser.h"
 #include <vector>
 #include <string>
 

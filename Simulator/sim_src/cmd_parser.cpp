@@ -1,4 +1,4 @@
-#include "cmd_parser.h"
+#include "../sim_include/cmd_parser.h"
 #include <iostream>
 #include <filesystem>
 #include <sstream>
