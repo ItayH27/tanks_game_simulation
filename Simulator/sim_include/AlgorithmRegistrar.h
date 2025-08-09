@@ -7,8 +7,8 @@
 #include <cassert>
 #include <utility>
 #include <cstddef>
-#include "TankAlgorithm.h"
-#include "Player.h"
+#include "../../common/TankAlgorithm.h"
+#include "../../common/Player.h"
 
 using std::unique_ptr, std::vector, std::string, std::function, std::move, std::string;
 

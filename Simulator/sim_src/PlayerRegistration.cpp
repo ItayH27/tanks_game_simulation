@@ -1,4 +1,4 @@
-#include "Common/PlayerRegistration.h"
+#include "../../common/PlayerRegistration.h"
 #include "../sim_include/AlgorithmRegistrar.h"
 
 PlayerRegistration::PlayerRegistration(PlayerFactory factory) {

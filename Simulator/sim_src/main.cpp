@@ -1,6 +1,6 @@
 #include <iostream>
 #include "../sim_include/cmd_parser.h"
-#include "simulator.h"  // You need to implement this: contains runComparative() and runCompetition()
+#include "../sim_include/competitive_simulator.h"
 
 int main(int argc, char** argv) {
     CmdParser::ParseResult result = CmdParser::parse(argc, argv);
@@ -17,17 +17,14 @@ int main(int argc, char** argv) {
                 result.gameMapFile,
                 result.gameManagersFolder,
                 result.algorithm1File,
-                result.algorithm2File,
-                result.numThreads.value_or(1),
-                result.verbose
+                result.algorithm2File
             );
         } else if (result.mode == CmdParser::Mode::Competition) {
-            runCompetition(
+            CompetitiveSimulator competitiveSimulator(result.verbose, (result.numThreads.value()));
+            competitiveSimulator.run(
                 result.gameMapsFolder,
                 result.gameManagerFile,
-                result.algorithmsFolder,
-                result.numThreads.value_or(1),
-                result.verbose
+                result.algorithmsFolder
             );
         }
     } catch (const std::exception& error) {
