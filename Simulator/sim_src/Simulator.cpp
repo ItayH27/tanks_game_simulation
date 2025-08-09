@@ -1,6 +1,5 @@
 #include "../sim_include/Simulator.h"
-#include <fstream>
-#include <iostream>
+#include "sim_include/Simulator.h"
 
 bool Simulator::extractLineValue(const std::string &line, int &value, const std::string &key, const size_t line_number) {
     std::string no_space_line;
@@ -20,15 +19,70 @@ bool Simulator::extractLineValue(const std::string &line, int &value, const std:
     return true; // Successfully extraction
 }
 
-// TODO: Adjust to complie with not being in Gamemanager
-// TODO: Break into smaller fucntions
-void readMap(const std::string& file_path) {
+bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& file) {
+    string line;
+    size_t line_number = 0;
+
+    // Read and store map name from the first line
+    if (!getline(file, line)) {
+        cerr << "Error: Unable to read map name." << endl;
+        return false;
+    }
+    mapData.name = line;
+    ++line_number;
+
+    // Line 2: MaxSteps
+    if (!getline(file, line) || !extractLineValue(line, mapData.maxSteps, "MaxSteps", line_number)) { // Failed to read line
+        std::cerr << "Error: Missing MaxSteps.\n";
+        remove("input_errors.txt");
+        mapData.failedInit = true;
+        return false;
+    }
+    ++line_number;
+
+    // Line 3: NumShells
+    if (!getline(file, line) || !extractLineValue(line, mapData.numShells, "NumShells", line_number)) { // Failed to read line
+        std::cerr << "Error: Missing NumShells.\n";
+        remove("input_errors.txt");
+        mapData.failedInit = true;
+        return false;
+    }
+    ++line_number;
+
+    // Line 4: Rows
+    if (!getline(file, line) || !extractLineValue(line, mapData.rows, "Rows", line_number)) { // Failed to read line
+        std::cerr << "Error: Missing Rows.\n";
+        remove("input_errors.txt");
+        mapData.failedInit = true;
+        return false;
+    }
+    ++line_number;
+
+    // Line 5: Cols
+    if (!getline(file, line) || !extractLineValue(line, mapData.cols, "Cols", line_number)) { // Failed to read line
+        std::cerr << "Error: Missing Cols.\n";
+        remove("input_errors.txt");
+        mapData.failedInit = true;
+        return false;
+    }
+    ++line_number;
+    return true;
+}
+
+// TODO: Add function to fill gameboard
+
+// TODO: Adjust to compile with not being in Game manager
+// TODO: Break into smaller functions
+Simulator::MapData Simulator::readMap(const std::string& file_path) {
+    MapData mapData;
+    string line;
+
     // input_error.txt initialisation
     bool has_errors = false; // Flag to indicate if there are any errors in the file
     ofstream input_errors("input_errors.txt"); // Open file to store errors
 
     // Open game log
-    path actual_path(file_path);
+    fs::path actual_path(file_path);
     string file_name = actual_path.stem().string(); // Get the file name without extension
     gameLog_.open("output_" + file_name + ".txt");
     if (!gameLog_.is_open()) { // Failed to create game log
@@ -42,102 +96,41 @@ void readMap(const std::string& file_path) {
     if (!file) { // Failed to open file
         std::cerr << "Error: Failed to open file: " << file_path << endl;
         remove("input_errors.txt");
-        failedInit_ = true;
-        return;
+        mapData.failedInit = true;
+        return mapData;
     }
 
-    string line;
-    size_t line_number = 0;
+    if (!extractValues(mapData, file)) { return mapData; }
 
-    // Skip line 1 (map name)
-    getline(file, line);
-    ++line_number;
+    // gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
 
-    // Line 2: MaxSteps
-    if (!getline(file, line) || !extractLineValue(line, maxSteps_, "MaxSteps", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing MaxSteps.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 3: NumShells
-    if (!getline(file, line) || !extractLineValue(line, numShells_, "NumShells", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing NumShells.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 4: Rows
-    if (!getline(file, line) || !extractLineValue(line, height_, "Rows", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing Rows.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 5: Cols
-    if (!getline(file, line) || !extractLineValue(line, width_, "Cols", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing Cols.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
-
-    int tank_1_count = 0, tank_2_count = 0; // Count the number of tanks in each player
+    vector<vector<char>> gameBoard;
+    gameBoard.resize(mapData.rows, vector<char>(mapData.cols, ' '));
     int i = 0; // Current row
     int extra_rows = 0;
     int extra_cols = 0;
 
     // Read the rest of the file
     while (getline(file, line)) {
-        if (i >= height_) { // Check if we have reached the end of the file
+        if (i >= mapData.rows) { // Check if we have reached the end of the file
             ++extra_rows;
             continue;
         }
 
         // Check if line has more characters than expected width
-        if (static_cast<int>(line.size()) > width_) {
-            extra_cols += static_cast<int>(line.size()) - width_;
-            input_errors << "Error recovered from: Extra " << (static_cast<int>(line.size()) - width_) << " columns at row "
-                    << i << " ignored.\n";
+        if (static_cast<int>(line.size()) > mapData.cols) {
+            extra_cols += static_cast<int>(line.size()) - mapData.cols;
+            input_errors << "Error recovered from: Extra " << (static_cast<int>(line.size()) - mapData.cols) <<
+                " columns at row " << i << " ignored.\n";
             has_errors = true;
         }
 
         // Truncate the line to fit the declared width
-        line = line.substr(0, width_);
+        line = line.substr(0, mapData.cols);
 
-        for (int j = 0; j < width_; ++j) { // Iterate through each cell in the line
+        for (int j = 0; j < mapData.cols; ++j) { // Iterate through each cell in the line
             char cell = (j < static_cast<int>(line.size())) ? line[j] : ' ';  // Fill missing columns with spaces
-
-            if (cell == '1') { // Cell contains a tank of player 1
-                auto tank = tankFactory_->create(1, tank_1_count); // Create a new tank for player 1
-                auto tank_info = make_unique<TankInfo>(tank_1_count, make_pair(j, i),
-                    numShells_, 1, std::move(tank)); // Create a new TankInfo for the tank
-                tanks_.push_back(std::move(tank_info)); // Add tank 1 to vector
-                ++tank_1_count;
-
-            } else if (cell == '2') { // Cell contains a tank of player 2
-                auto tank = tankFactory_->create(2, tank_2_count); // Create a new tank for player 2
-                auto tank_info = make_unique<TankInfo>(tank_2_count, make_pair(j, i),
-                    numShells_, 2, std::move(tank)); // Create a new TankInfo for the tank
-                tanks_.push_back(std::move(tank_info)); // Add tank 2 to vector
-                ++tank_2_count;
-
-            } else if (cell != '#' && cell != '@' && cell != ' ') { // Unknown character
-                input_errors << "Error recovered from: Unknown character '" << cell << "' at row " << i << ", column " << j << ". Treated as space.\n";
-                cell = ' ';
-                has_errors = true;
-            }
-
-            gameboard_[i][j] = cell; // Update the gameboard with the new cell
+            gameBoard[i][j] = cell; // Update the gameboard with the new cell
         }
 
         ++i;
@@ -152,24 +145,6 @@ void readMap(const std::string& file_path) {
     if (extra_cols > 0) {
         input_errors << "Error recovered from: Extra " << extra_cols << " columns beyond declared width ignored.\n";
         has_errors = true;
-    }
-
-    // Check for missing tanks
-    if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination conditions
-        if (tank_1_count == 0 && tank_2_count == 0) { // Check if both players have no tanks
-            gameLog_ << "Tie, both players have zero tanks\n";
-
-        } else if (tank_1_count == 0) { // Check if player 1 has no tanks
-            gameLog_ << "Player 2 won with " << tank_2_count << " tanks still alive\n";
-
-        } else if (tank_2_count == 0) { // Check if player 2 has no tanks
-            gameLog_ << "Player 1 won with " << tank_1_count << " tanks still alive\n";
-        }
-
-        // Update the game state and flush the logs
-        gameOver_ = true;
-        gameLog_.flush();
-        gameLog_.close();
     }
 
     // Delete input_errors.txt if no errors were found
