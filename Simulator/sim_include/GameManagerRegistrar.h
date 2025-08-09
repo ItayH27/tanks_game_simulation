@@ -4,7 +4,9 @@
 #include <memory>
 #include <functional>
 #include <cassert>
-#include "common/AbstractGameManager.h"
+#include <stdexcept>
+
+#include "../common/AbstractGameManager.h"
 
 class GameManagerRegistrar {
     struct GameManagerEntry {

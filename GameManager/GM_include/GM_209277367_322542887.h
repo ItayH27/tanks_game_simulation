@@ -5,6 +5,8 @@
 #include <fstream>
 #include <set>
 #include <iostream>
+
+#include "GameResult.h"
 #include "PlayerFactory.h" // FIX
 #include "TankAlgorithmFactory.h" // FIX
 #include "../common/SatelliteView.h"
@@ -14,6 +16,12 @@
 
 #define GAME_OVER_NO_AMMO 40 // Number of turns to wait after no ammo condition is met
 #define NUM_OF_DIRECTIONS 8 // Number of directions
+#define PLAYER_1_WIN 1
+#define PLAYER_2_WIN 2
+#define TIE 0
+#define NO_SHELLS_GAME_OVER 2
+#define TIMER_GAME_OVER 1
+#define ALL_TANKS_DEAD 0
 
 using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl;
 using TankIterator = std::vector<std::unique_ptr<TankInfo>>::iterator;
@@ -47,6 +55,7 @@ namespace GameManager_209277367_322542887 {
         vector<unique_ptr<Shell>> shells_; // Shells fired by tanks
         ofstream gameLog_; // Log file for game events
         ofstream errorLog_; // Log file for errors
+        GameResult gameResult_;
         int numShells_{}; // Number of shells for each tank
         int maxSteps_{}; // Maximum steps for the game
         bool failedInit_; // Flag to indicate if initialization failed
@@ -62,7 +71,7 @@ namespace GameManager_209277367_322542887 {
         vector<vector<char>> lastRoundGameboard_;
         vector<pair<ActionRequest, bool>> tankActions_;
 
-        bool visualMode_; // Visualisation
+        // bool visualMode_; // Visualisation
 
         // Base functions
         bool extractLineValue(const string& line, int& value, const string& key, size_t line_number);
@@ -88,7 +97,9 @@ namespace GameManager_209277367_322542887 {
         static string getEnumName(Direction dir);
         static string getEnumName(ActionRequest action) ;
         void updateGameLog();
+        void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
+            unique_ptr<SatelliteView> game_state, size_t rounds);
 
-        void writeBoardToJson() const; // Visualisation
+        // void writeBoardToJson() const; // Visualisation
     };
 }

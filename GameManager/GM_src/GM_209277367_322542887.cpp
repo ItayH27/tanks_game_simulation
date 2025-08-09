@@ -1,4 +1,4 @@
-#include "GM_include/GM_209277367_322542887.h"
+#include "../GM_include/GM_209277367_322542887.h"
 
 #include <string>
 #include <iostream>
@@ -11,67 +11,66 @@
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <mutex>
 
-#include "GameManagerRegistration.h"
+#include "../Simulator/sim_include/AlgorithmRegistrar.h"
 
 using std::move, std::endl, std::getline, std::make_unique, std::make_pair, std::filesystem::path;
 
 using namespace GameManager_209277367_322542887;
 REGISTER_GAME_MANAGER(GM_209277367_322542887);
 
-// Visualisation
-void GM_209277367_322542887::writeBoardToJson() const {
-    std::vector<std::vector<std::string>> serializable;
+// // Visualisation
+// void GM_209277367_322542887::writeBoardToJson() const {
+//     std::vector<std::vector<std::string>> serializable;
+//
+//     for (const auto& row : gameboard_) {
+//         std::vector<std::string> new_row;
+//         for (char cell : row) {
+//             new_row.emplace_back(1, cell);
+//         }
+//         serializable.push_back(new_row);
+//     }
+//
+//     nlohmann::json j;
+//     j["board"] = serializable;
+//     j["turn"] = turn_;
+//     j["gameOver"] = gameOver_;
+//     j["maxSteps"] = maxSteps_;
+//     j["player1Tanks"] = numTanks1_;
+//     j["player2Tanks"] = numTanks2_;
+//
+//     if (gameOver_) {
+//         std::ostringstream winner_msg;
+//
+//         if (gameOverStatus_ == 1)
+//             winner_msg << "Player 2 won with " << numTanks2_ << " tanks still alive";
+//         else if (gameOverStatus_ == 2)
+//             winner_msg << "Player 1 won with " << numTanks1_ << " tanks still alive";
+//         else if (gameOverStatus_ == 3)
+//             winner_msg << "Tie, both players have zero tanks";
+//         else if (turn_ >= maxSteps_)
+//             winner_msg << "Tie, reached max steps = " << maxSteps_
+//                        << ", player 1 has " << numTanks1_
+//                        << " tanks, player 2 has " << numTanks2_ << " tanks";
+//
+//         j["winner"] = winner_msg.str();
+//     }
+//
+//     std::ofstream out("visualizer/game_state.json");
+//     out << j.dump(2);
+// }
 
-    for (const auto& row : gameboard_) {
-        std::vector<std::string> new_row;
-        for (char cell : row) {
-            new_row.emplace_back(1, cell);
-        }
-        serializable.push_back(new_row);
-    }
-
-    nlohmann::json j;
-    j["board"] = serializable;
-    j["turn"] = turn_;
-    j["gameOver"] = gameOver_;
-    j["maxSteps"] = maxSteps_;
-    j["player1Tanks"] = numTanks1_;
-    j["player2Tanks"] = numTanks2_;
-
-    if (gameOver_) {
-        std::ostringstream winner_msg;
-
-        if (gameOverStatus_ == 1)
-            winner_msg << "Player 2 won with " << numTanks2_ << " tanks still alive";
-        else if (gameOverStatus_ == 2)
-            winner_msg << "Player 1 won with " << numTanks1_ << " tanks still alive";
-        else if (gameOverStatus_ == 3)
-            winner_msg << "Tie, both players have zero tanks";
-        else if (turn_ >= maxSteps_)
-            winner_msg << "Tie, reached max steps = " << maxSteps_
-                       << ", player 1 has " << numTanks1_
-                       << " tanks, player 2 has " << numTanks2_ << " tanks";
-
-        j["winner"] = winner_msg.str();
-    }
-
-    std::ofstream out("visualizer/game_state.json");
-    out << j.dump(2);
-}
-
-// Visualisation
-void GM_209277367_322542887::setVisualMode(const bool visual_mode) { this->visualMode_ = visual_mode; }
+// // Visualisation
+// void GM_209277367_322542887::setVisualMode(const bool visual_mode) { this->visualMode_ = visual_mode; }
 
 // Constructor for GameManager class
-GM_209277367_322542887::GameManager_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
+GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
         std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
-    player2_(nullptr), numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
-    turn_(0),
-    noAmmoFlag_(false),
-    gameOverStatus_(0),
-    noAmmoTimer_(GAME_OVER_NO_AMMO), visualMode_(false) {
-}
+    player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
+    turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
+    // visualMode_(false)
+
 
 // Extract relevant value from a line of text
 bool GM_209277367_322542887::extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number) {
@@ -786,21 +785,21 @@ void GM_209277367_322542887::run() {
     player2_ = playerFactory_->create(2, width_, height_, maxSteps_, numShells_);
 
     // std::cout << "\nGame Started!" << endl;
-    if (visualMode_) { writeBoardToJson(); }// Visualisation
+    // if (visualMode_) { writeBoardToJson(); }// Visualisation
 
     // Game loop
     while (!gameOver_) { // Main game loop
-        if (visualMode_) { writeBoardToJson(); }// Visualisation
-        if (visualMode_) {
-            // Visualisation
-            std::filesystem::path flagPath = std::filesystem::current_path() / "visualizer" / "step.flag";
-            // std::cout << "Waiting for: " << flagPath << std::endl;
-
-            while (!std::filesystem::exists(flagPath)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-            std::filesystem::remove(flagPath);
-        }
+        // if (visualMode_) { writeBoardToJson(); }// Visualisation
+        // if (visualMode_) {
+        //     // Visualisation
+        //     std::filesystem::path flagPath = std::filesystem::current_path() / "visualizer" / "step.flag";
+        //     // std::cout << "Waiting for: " << flagPath << std::endl;
+        //
+        //     while (!std::filesystem::exists(flagPath)) {
+        //         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        //     }
+        //     std::filesystem::remove(flagPath);
+        // }
 
         // Set the gameboard to the last round's gameboard
         lastRoundGameboard_ = gameboard_;
@@ -832,6 +831,8 @@ void GM_209277367_322542887::run() {
         if (noAmmoFlag_) { // If both tanks are out of ammo
             noAmmoTimer_--; // Decrease the no ammo timer
             if (noAmmoTimer_ == 0) { // Check if the timer has reached zero
+                updateGameResult(TIE, NO_SHELLS_GAME_OVER, {numTanks1_, numTanks2_},
+                    satellite_view_, turn_);
                 gameOver_ = true; // Set game_over to true if both tanks are out of ammo for GAME_OVER_NO_AMMO turns
             gameLog_ << "Tie, both players have zero shells for " << GAME_OVER_NO_AMMO << " steps" << endl; // Print message if both tanks are out of ammo
             }
@@ -839,15 +840,18 @@ void GM_209277367_322542887::run() {
 
         if (gameOver_) { // Check if the game is over
             if (gameOverStatus_ == 3) { // Both players are missing tanks
+                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, satellite_view_, turn_);
                 gameLog_ << "Tie, both players have zero tanks" <<  endl;
             } else if (gameOverStatus_ == 1) { // Player 1 has no tanks left
+                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, turn_);
                 gameLog_ << "Player 2 won with " << numTanks2_ << " tanks still alive" << endl;
             } else if (gameOverStatus_ == 2) { // Player 2 has no tanks left
+                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, turn_);
                 gameLog_ << "Player 1 won with " <<  numTanks1_ << " tanks still alive" << endl;
             }
 
-            if (visualMode_) { writeBoardToJson(); }// Visualisation
-            break; // Exit the game loop if the game is over
+            // if (visualMode_) { writeBoardToJson(); }// Visualisation
+            // break; // Exit the game loop if the game is over
         }
 
         ++turn_; // Increment the turn counter
@@ -862,6 +866,15 @@ pair<int, int> GM_209277367_322542887::nextLocation(const int x, const int y, co
         dy = -dy;
     }
     return {(x + dx + width_) % width_, (y + dy + height_) % height_}; // Calculate the next location
+}
+
+void GM_209277367_322542887::updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
+    unique_ptr<SatelliteView> game_state, size_t rounds) {
+    gameResult_.winner = winner;
+    gameResult_.reason = static_cast<GameResult::Reason>(reason);
+    gameResult_.remaining_tanks = remaining_tanks;
+    gameResult_.gameState = move(game_state);
+    gameResult_.rounds = rounds;
 }
 
 // Function to print gameboard
