@@ -27,10 +27,10 @@ class GameManagerRegistrar {
     };
 
     std::vector<GameManagerEntry> managers_;
-    static GameManagerRegistrar instance_;
+    static GameManagerRegistrar registrar;
 
 public:
-    static GameManagerRegistrar& get();
+    static GameManagerRegistrar& getGameManagerRegistrar();
 
     void createEntry(const std::string& name) {
         managers_.emplace_back(name);

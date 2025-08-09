@@ -46,10 +46,7 @@ int CompetitiveSimulator::run(const std::string& mapsFolder,
     }
 
     // Load algorithms using folder path
-    if (!loadAlgorithms(algorithmsFolder)) {
-        return 1;
-    }
-    if (algorithms_.size() < 2) { // Make sure there are least 2 algorithms
+    if (!loadAlgorithms(algorithmsFolder)) { // Make sure there are least 2 algorithms
         std::cerr << "Error: Need at least 2 algorithms for competition." << std::endl;
         return 1;
     }
@@ -151,7 +148,7 @@ bool CompetitiveSimulator::loadAlgorithms(const std::string& folder) {
         }
     }
 
-    return !algorithms_.empty();
+    return algorithms_.size() > 1;
 }
 
 /**
@@ -244,17 +241,37 @@ void CompetitiveSimulator::runGames() {
 void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     auto gm = createGameManager();
 
-    // TODO: Add actual game logic using task.algo1 and task.algo2
+    std::filesystem::path mapPath = task.mapPath;
+    // TODO: Read map file and extract game data (num_shells, etc...) and create satellite view
 
-    std::string name1 = task.algo1->name();
-    std::string name2 = task.algo2->name();
+    // Get algorithm and player factories from shared libraries
+    auto algo1 = task.algo1;
+    auto algo2 = task.algo2;
+    string name1 = algo1->name();
+    string name2 = algo2->name();
 
-    // Assume dummy result for now
-    GameResult result{};
-    result.winner = 0; // Tie by default
+    if (!algo1->hasPlayerFactory() || !algo1->hasTankAlgorithmFactory() ||
+        !algo2->hasPlayerFactory() || !algo2->hasTankAlgorithmFactory()) {
+        std::cerr << "Error: One of the algorithms is missing factories." << std::endl;
+        return;
+        }
 
+    // Create players using factories
+    auto player1 = algo1->createPlayer(/*player_index=*/1, /*x=*/..., /*y=*/..., max_steps, num_shells);
+    auto player2 = algo2->createPlayer(/*player_index=*/2, /*x=*/..., /*y=*/..., max_steps, num_shells);
+
+    // Run game manager with players and factories
+    GameResult result = gm->run(
+        map_width, map_height,
+        *mapView, map_name,
+        max_steps, num_shells,
+        *player1, name1, *player2, name2,
+        algo1->getTankAlgorithmFactory(),
+        algo2->getTankAlgorithmFactory()
+    );
+
+    // Use GameResult to update scores
     bool tie = result.winner == 0;
-
     if (tie) {
         updateScore(name1, name2, true);
     } else if (result.winner == 1) {
