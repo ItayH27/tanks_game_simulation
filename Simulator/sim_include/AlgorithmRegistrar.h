@@ -13,6 +13,7 @@
 using std::unique_ptr, std::vector, std::string, std::function, std::move, std::string;
 
 class AlgorithmRegistrar {
+public:
     class AlgorithmAndPlayerFactories {
         string so_name;
         TankAlgorithmFactory tankAlgorithmFactory;
@@ -43,7 +44,6 @@ class AlgorithmRegistrar {
     };
     vector<AlgorithmAndPlayerFactories> algorithms;
     static AlgorithmRegistrar registrar;
-public:
     static AlgorithmRegistrar& getAlgorithmRegistrar();
     void createAlgorithmFactoryEntry(const string& name) {
         algorithms.emplace_back(name);
