@@ -5,15 +5,11 @@
 #include <unordered_map>
 #include <memory>
 #include <filesystem>
-#include <mutex>  // Required for std::mutex
+#include <mutex>
 #include "AlgorithmRegistrar.h"
 #include "GameManagerRegistration.h"
 #include "AbstractGameManager.h"
 #include "Simulator.h"
-
-/**
- * @brief Tracks a shared library handle and its usage count.
- */
 
 class CompetitiveSimulator : Simulator {
 public:
@@ -27,8 +23,8 @@ public:
 private:
     struct GameTask {
         std::filesystem::path mapPath;
-        std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo1;
-        std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo2;
+        std::string algoName1;
+        std::string algoName2;
     };
 
     bool verbose_;
