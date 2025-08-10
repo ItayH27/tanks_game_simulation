@@ -11,7 +11,7 @@
 #include "../UserCommon/UC_include/ExtSatelliteView.h"
 
 namespace fs = std::filesystem;
-using std::string, std::ofstream, std::ifstream, std::endl, std::cerr;
+using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair, std::tuple, std::tie, std::unique_ptr;
 
 class Simulator {
 public:
@@ -25,13 +25,19 @@ protected:
         std::string name;
         int maxSteps;
         bool failedInit;
-        ExtSatelliteView* gameBoard = nullptr;
+        unique_ptr<ExtSatelliteView> satelliteView = nullptr;
         ofstream* inputErrors = nullptr;
     };
 
     MapData readMap(const std::string& file_path);
-    bool extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number);
-    bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& inputFile);
+
+private:
+    bool extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number,
+        Simulator::MapData &mapData, ofstream &inputErrors);
+    bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& inputFile, ofstream &inputErrors);
+    tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file, Simulator::MapData &mapData,
+        ofstream &inputErrors);
+    bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErrors)
 
     std::optional<MapData> map_;
 };

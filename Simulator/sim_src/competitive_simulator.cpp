@@ -10,6 +10,8 @@
 #include <filesystem>
 #include <condition_variable>
 
+#include "sim_include/Simulator.h"
+
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
     : verbose_(verbose), numThreads_(numThreads) {}
 
@@ -242,7 +244,8 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     auto gm = createGameManager();
 
     std::filesystem::path mapPath = task.mapPath;
-    // TODO: Read map file and extract game data (num_shells, etc...) and create satellite view
+    MapData mapData = readMap(mapPath);
+    if (mapData.failedInit) { } // TODO: Implement failedInit case
 
     // Get algorithm and player factories from shared libraries
     auto algo1 = task.algo1;
@@ -257,17 +260,15 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         }
 
     // Create players using factories
-    auto player1 = algo1->createPlayer(/*player_index=*/1, /*x=*/..., /*y=*/..., max_steps, num_shells);
-    auto player2 = algo2->createPlayer(/*player_index=*/2, /*x=*/..., /*y=*/..., max_steps, num_shells);
+    auto player1 = algo1->createPlayer(1, mapData.cols, mapData.rows, mapData.maxSteps,
+        mapData.numShells);
+    auto player2 = algo2->createPlayer(2, mapData.cols, mapData.rows, mapData.maxSteps,
+        mapData.numShells);
 
     // Run game manager with players and factories
-    GameResult result = gm->run(
-        map_width, map_height,
-        *mapView, map_name,
-        max_steps, num_shells,
-        *player1, name1, *player2, name2,
-        algo1->getTankAlgorithmFactory(),
-        algo2->getTankAlgorithmFactory()
+    GameResult result = gm->run(mapData.cols, mapData.rows, mapData., mapData.name,
+        mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
+        algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
     );
 
     // Use GameResult to update scores
