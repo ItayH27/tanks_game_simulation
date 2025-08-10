@@ -139,18 +139,25 @@ bool CompetitiveSimulator::loadMaps(const std::string& folder, std::vector<std::
  * @param maps List of map file paths to use in scheduling games.
  */
 void CompetitiveSimulator::scheduleGames(const std::vector<std::filesystem::path>& maps) {
-    size_t N = algorithms_.size();
+    std::vector<std::string> algoNames;
+
+    {
+        std::lock_guard<std::mutex> lock(handlesMutex_);
+        for (const auto& [name, _] : algoNameToPath_) {
+            algoNames.push_back(name);
+        }
+    }
+
+    size_t N = algoNames.size();
     for (size_t k = 0; k < maps.size(); ++k) {
         for (size_t i = 0; i < N; ++i) {
             size_t j = (i + 1 + k % (N - 1)) % N;
             if (i < j) {
-                auto& algo1 = algorithms_[i];
-                auto& algo2 = algorithms_[j];
-                scheduledGames_.push_back({maps[k], algo1, algo2});
+                scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
 
                 std::lock_guard<std::mutex> lock(handlesMutex_);
-                algoUsageCounts_[algo1->name()]++;
-                algoUsageCounts_[algo2->name()]++;
+                algoUsageCounts_[algoNames[i]]++;
+                algoUsageCounts_[algoNames[j]]++;
             }
         }
     }
@@ -290,8 +297,8 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     if (mapData.failedInit) { } // TODO: Implement failedInit case
 
     // Get algorithm and player factories from shared libraries
-    string name1 = task.algo1->name();
-    string name2 = task.algo2->name();
+    const std::string& name1 = task.algoName1;
+    const std::string& name2 = task.algoName2;
 
     try {
         ensureAlgorithmLoaded(name1);
@@ -304,7 +311,6 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     // Get the corresponding AlgorithmAndPlayerFactories
     auto algo1 = getValidatedAlgorithm(name1);
     auto algo2 = getValidatedAlgorithm(name2);
-
     if (!algo1 || !algo2) {
         std::cerr << "Error: One of the algorithms is missing factories." << std::endl;
         return;
