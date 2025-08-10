@@ -2,6 +2,17 @@
 #include "sim_include/Simulator.h"
 #include "sim_include/Simulator.h"
 
+/**
+ * @brief Extracts an integer value from a configuration line in the map file.
+ *
+ * @param line The line to extract the value from.
+ * @param value Reference to the integer where the extracted value will be stored.
+ * @param key The key expected in the line (e.g., "MaxSteps").
+ * @param line_number The current line number (used for error reporting).
+ * @param mapData Reference to the map data structure to flag failure if needed.
+ * @param inputErrors Stream to write input-related error messages.
+ * @return true if the value was successfully extracted, false otherwise.
+ */
 bool Simulator::extractLineValue(const std::string &line, int &value, const std::string &key, const size_t line_number,
     Simulator::MapData &mapData, ofstream &inputErrors) {
 
@@ -22,6 +33,14 @@ bool Simulator::extractLineValue(const std::string &line, int &value, const std:
     return true; // Successfully extraction
 }
 
+/**
+ * @brief Extracts key configuration values from the map file into the MapData struct.
+ *
+ * @param mapData The struct to store extracted configuration values.
+ * @param file The input stream for the map file.
+ * @param inputErrors Stream to write any parsing errors.
+ * @return true if all required values are successfully extracted, false otherwise.
+ */
 bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& file, ofstream &inputErrors) {
     string line;
     size_t line_number = 0;
@@ -76,6 +95,18 @@ bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& file, ofstr
     return true;
 }
 
+/**
+ * @brief Fills the game board from the remaining lines in the map file.
+ *
+ * @param gameBoard 2D character grid representing the game map.
+ * @param file Input file stream pointing to the map file content.
+ * @param mapData The associated map metadata.
+ * @param inputErrors Stream to record errors like extra rows/columns.
+ * @return A tuple containing:
+ *         - true if any errors were encountered,
+ *         - the number of extra rows,
+ *         - the number of extra columns.
+ */
 tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file,
     Simulator::MapData &mapData, ofstream &inputErrors) {
 
@@ -112,6 +143,14 @@ tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, 
     return {hasErrors, extraRows, extraCols};
 }
 
+/**
+ * @brief Logs and checks for extra rows or columns beyond declared dimensions.
+ *
+ * @param extraRows Number of extra rows in the input.
+ * @param extraCols Number of extra columns in the input.
+ * @param inputErrors Stream to write the error recovery information.
+ * @return true if any extra rows or columns were detected, false otherwise.
+ */
 bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErrors) {
     bool hasErrors = false;
 
@@ -129,6 +168,12 @@ bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErro
     return hasErrors;
 }
 
+/**
+ * @brief Reads the entire map from file and initializes MapData with extracted parameters and game board.
+ *
+ * @param file_path Path to the map file.
+ * @return Initialized MapData object. If any error occurs, MapData.failedInit will be set to true.
+ */
 Simulator::MapData Simulator::readMap(const std::string& file_path) {
     int extraRows = 0, extraCols = 0;
     MapData mapData;
@@ -160,11 +205,10 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
 
     if (!extractValues(mapData, file, input_errors)) { return mapData; }
 
-    // gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
-
     vector<vector<char>> gameBoard;
     gameBoard.resize(mapData.rows, vector<char>(mapData.cols, ' '));
     tie(has_errors, extraRows, extraCols) = fillGameBoard(gameBoard, file, mapData, input_errors);
+    mapData.satelliteView = std::make_unique<ExtSatelliteView>(mapData.rows, mapData.cols, gameBoard);
 
     has_errors = has_errors ? has_errors : checkForExtras(extraRows, extraCols, input_errors);
 

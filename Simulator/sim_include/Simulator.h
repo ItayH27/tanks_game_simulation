@@ -11,7 +11,7 @@
 #include "../UserCommon/UC_include/ExtSatelliteView.h"
 
 namespace fs = std::filesystem;
-using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair, std::tuple, std::tie;
+using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair, std::tuple, std::tie, std::unique_ptr;
 
 class Simulator {
 public:
@@ -25,7 +25,7 @@ protected:
         std::string name;
         int maxSteps;
         bool failedInit;
-        ExtSatelliteView* gameBoard = nullptr;
+        unique_ptr<ExtSatelliteView> satelliteView = nullptr;
         ofstream* inputErrors = nullptr;
     };
 

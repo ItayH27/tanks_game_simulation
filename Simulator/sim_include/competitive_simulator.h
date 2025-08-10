@@ -9,6 +9,7 @@
 #include "AlgorithmRegistrar.h"
 #include "GameManagerRegistration.h"
 #include "AbstractGameManager.h"
+#include "Simulator.h"
 
 /**
  * @brief Tracks a shared library handle and its usage count.
@@ -18,7 +19,7 @@ struct SharedLibHandle {
     int refCount = 0;
 };
 
-class CompetitiveSimulator {
+class CompetitiveSimulator : Simulator {
 public:
     CompetitiveSimulator(bool verbose, size_t numThreads);
     ~CompetitiveSimulator();
