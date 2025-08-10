@@ -30,6 +30,7 @@ protected:
     };
 
     MapData readMap(const std::string& file_path);
+    string Simulator::timestamp();
 
 private:
     bool extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number,

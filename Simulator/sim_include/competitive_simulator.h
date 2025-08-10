@@ -14,10 +14,6 @@
 /**
  * @brief Tracks a shared library handle and its usage count.
  */
-struct SharedLibHandle {
-    void* handle = nullptr;
-    int refCount = 0;
-};
 
 class CompetitiveSimulator : Simulator {
 public:
@@ -44,21 +40,22 @@ private:
     std::vector<GameTask> scheduledGames_;
     std::unordered_map<std::string, int> scores_;
     std::mutex scoresMutex_; // protect score updates
-    std::unordered_map<std::string, SharedLibHandle> algoLibHandles_;
+    std::unordered_map<std::string, void*> algoPathToHandle_;
     std::unordered_map<std::string, std::string> algoNameToPath_;
     std::unordered_map<std::string, int> algoUsageCounts_;
     std::mutex handlesMutex_;
 
     bool loadGameManager(const std::string& soPath);
-    bool loadAlgorithms(const std::string& folder);
+    bool getAlgorithms(const std::string& folder);
     bool loadMaps(const std::string& folder, std::vector<std::filesystem::path>& outMaps);
     void scheduleGames(const std::vector<std::filesystem::path>& maps);
     void runGames();
+    void CompetitiveSimulator::ensureAlgorithmLoaded(const std::string& name);
+    std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>
+        CompetitiveSimulator::getValidatedAlgorithm(const std::string& name);
     void runSingleGame(const GameTask& task);
     void updateScore(const std::string& winnerName, const std::string& loserName, bool tie);
     void writeOutput(const std::string& outFolder, const std::string& mapFolder, const std::string& gmSoName);
     std::unique_ptr<AbstractGameManager> createGameManager();
-    std::string timestamp();
-    void releaseAlgorithmLib(const std::string& path);
     void decreaseUsageCount(const std::string& algoName);
 };
