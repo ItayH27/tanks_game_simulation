@@ -222,3 +222,17 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
 
     return mapData;
 }
+
+/**
+ * @brief Generates a timestamp string suitable for use in filenames.
+ *
+ * @return String in format YYYYMMDD_HHMMSS representing current local time.
+ */
+
+string Simulator::timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
+    return ss.str();
+}
