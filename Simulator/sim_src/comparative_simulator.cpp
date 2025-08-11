@@ -5,6 +5,7 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <filesystem>
@@ -15,10 +16,19 @@
 
 #include "sim_include/GameManagerRegistrar.h"
 
-using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_iterator;
+using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_iterator, std::ofstream, std::ostringstream, std::ranges::sort;
 
 ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
     : verbose_(verbose), numThreads_(numThreads) {
+}
+
+ComparativeSimulator::~ComparativeSimulator() {
+    for (auto& handle : handles_) {
+        if (handle) {
+            dlclose(handle);
+        }
+    }
+    handles_.clear();
 }
 
 int ComparativeSimulator::run(const string& mapPath,
@@ -43,8 +53,7 @@ int ComparativeSimulator::run(const string& mapPath,
     // loadGameManagers(gms_paths_);
 
     runGames();
-
-    WriteOutput();
+    WriteOutput(mapPath, algorithmSoPath1, algorithmSoPath2, gmFolder);
 
     return 0;
 }
@@ -251,6 +260,62 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
     }
 }
 
+void ComparativeSimulator::WriteOutput(const string& mapPath,
+                     const string& algorithmSoPath1,
+                     const string& algorithmSoPath2,
+                     const string& gmFolder) {
+    // Make the groups from all results
+    makeGroups(allResults);
+    // Sort the groups by count in ascending order
+    sort(groups,
+            [](const GameResultInfo& a, const GameResultInfo& b) {
+            return a.count < b.count; // Sort by count in ascending order
+        });
+
+    // Build the output buffer
+    string outputBuffer = BuildOutputBuffer(mapPath, algorithmSoPath1, algorithmSoPath2);
+
+    // Create the output file with a timestamp
+    string time = timestamp();
+    ofstream outFile(gmFolder + "/comparative_results_" + time +".txt");
+
+    // If file didn't open, print error and the output buffer
+    if (!outFile) {
+        printf("Error: failed to open output file.\n");
+        printf("%s\n", outputBuffer.c_str());
+        return;
+    }
+    // Else, write the output buffer to the file
+    outFile << outputBuffer;
+    outFile.close();
+}
+
+string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
+                                                 const string& algorithmSoPath1,
+                                                 const string& algorithmSoPath2) {
+    ostringstream oss;
+    oss << "game_map=" << getFilename(mapPath) << "\n"
+        << "algorithm1=" << getFilename(algorithmSoPath1) << "\n"
+        << "algorithm2=" << getFilename(algorithmSoPath2) << "\n"
+        << "\n";
+
+    while (!groups.empty()) {
+        auto group = move(groups.back());
+        groups.pop_back();
+
+        for (int i = 0; i < group.gm_names.size()-1 ; i++) {
+            oss << group.gm_names[i] << ", ";
+        }
+        oss << group.gm_names[group.gm_names.size()] << "\n"
+            << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
+            << group.result.rounds << "\n"
+            << group.result.gameState << "\n";
+    }
+
+    return oss.str();
+}
+
+
 // void ComparativeSimulator::runSingleGame(const path& gmPath) {
 //     GameManagerFactory gameManagerHandle;
 //     if (!loadGameManager(gmPath, gameManagerHandle)) {
@@ -287,17 +352,3 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
 //     //TODO: map the game manager according to its results in gameResToGameManagers_
 //
 // }
-
-
-
-
-
-std::string ComparativeSimulator::timestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
-    return ss.str();
-}
-
-
