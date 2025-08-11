@@ -17,13 +17,16 @@ CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
 
 CompetitiveSimulator::~CompetitiveSimulator() {
     std::lock_guard<std::mutex> lock(handlesMutex_);
-    for (auto& [path, handleData] : algoLibHandles_) {
-        if (handleData.handle && handleData.refCount > 0) {
-            dlclose(handleData.handle);
+    for (auto& [path, handle] : algoPathToHandle_) {
+        if (handle) {
+            dlclose(handle);
         }
     }
+    algoPathToHandle_.clear();
+
     if (gameManagerHandle_) {
         dlclose(gameManagerHandle_);
+        gameManagerHandle_ = nullptr;
     }
 }
 
@@ -48,7 +51,7 @@ int CompetitiveSimulator::run(const std::string& mapsFolder,
     }
 
     // Load algorithms using folder path
-    if (!loadAlgorithms(algorithmsFolder)) { // Make sure there are least 2 algorithms
+    if (!getAlgorithms(algorithmsFolder)) { // Make sure there are least 2 algorithms
         std::cerr << "Error: Need at least 2 algorithms for competition." << std::endl;
         return 1;
     }
@@ -68,7 +71,7 @@ int CompetitiveSimulator::run(const std::string& mapsFolder,
 }
 
 /**
- * @brief Dynamically loads the GameManager shared library and retrieves its factory function.
+ * @brief Dynamically loads the GameManager shared library.
  *
  * @param soPath Path to the GameManager `.so` file.
  * @return true if successfully loaded, false otherwise.
@@ -79,18 +82,6 @@ bool CompetitiveSimulator::loadGameManager(const std::string& soPath) {
         std::cerr << "dlopen failed: " << dlerror() << std::endl;
         return false;
     }
-
-    // Get factory ptr from loaded gamemanger
-    void* factoryPtr = dlsym(gameManagerHandle_, "_Z20game_manager_factoryb");
-    const char* error = dlerror();
-    if (error || !factoryPtr) {
-        std::cerr << "dlsym failed to find GameManager factory: " << (error ? error : "null") << std::endl;
-        return false;
-    }
-
-    // Recast into known type
-    gameManagerFactory_ = *reinterpret_cast<GameManagerFactory*>(factoryPtr);
-    return true;
 }
 
 /**
@@ -101,56 +92,26 @@ bool CompetitiveSimulator::loadGameManager(const std::string& soPath) {
  * @param folder Path to the folder containing algorithm `.so` files.
  * @return true if at least one algorithm was successfully loaded, false otherwise.
  */
-bool CompetitiveSimulator::loadAlgorithms(const std::string& folder) {
-    auto& registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
+bool CompetitiveSimulator::getAlgorithms(const std::string& folder) {
+    bool foundAny = false;
 
-    // Go over all files in the algorithms folder
     for (const auto& entry : std::filesystem::directory_iterator(folder)) {
-        if (entry.path().extension() == ".so") { // We care only about .so files
-            const std::string soPath = entry.path().string(); // Get the .so path
-            const std::string name = entry.path().stem().string(); // Get files name
+        if (entry.path().extension() == ".so") {
+            const std::string soPath = entry.path().string();
+            const std::string name = entry.path().stem().string();
 
-            registrar.createAlgorithmFactoryEntry(name);
-
-            void* handle = nullptr;
+            // Record metadata — don't dlopen yet
             {
                 std::lock_guard<std::mutex> lock(handlesMutex_);
-                auto& handleData = algoLibHandles_[soPath]; // Get algo handle
-                if (!handleData.handle) { // if not already opened
-                    handleData.handle = dlopen(soPath.c_str(), RTLD_NOW);
-                    if (!handleData.handle) { // Failed to dlopen
-                        std::cerr << "Failed to load " << soPath << ": " << dlerror() << std::endl;
-                        registrar.removeLast(); // Remove last added alogrithm factory
-                        algoLibHandles_.erase(soPath); // Erase leftover soPath
-                        continue;
-                    }
-                }
-                ++handleData.refCount; // Increment refCount for habdle data
-                handle = handleData.handle;
+                algoNameToPath_[name] = soPath;
+                algoUsageCounts_[name] = 0;
             }
 
-            try {
-                registrar.validateLastRegistration(); // Validate added algo
-                algorithms_.push_back(std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>
-                    (registrar.end()[-1])); // Add actual algo to algos list
-
-                std::lock_guard<std::mutex> lock(handlesMutex_);
-                algoNameToPath_[name] = soPath; // Update mapping to algo
-            } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
-                std::cerr << "Bad algorithm registration in: " << name << std::endl;
-                registrar.removeLast();
-                std::lock_guard<std::mutex> lock(handlesMutex_);
-                auto& handleData = algoLibHandles_[soPath];
-                if (--handleData.refCount == 0 && handleData.handle) {
-                    dlclose(handleData.handle);
-                    algoLibHandles_.erase(soPath);
-                }
-                continue;
-            }
+            foundAny = true;
         }
     }
 
-    return algorithms_.size() > 1;
+    return foundAny;
 }
 
 /**
@@ -178,21 +139,104 @@ bool CompetitiveSimulator::loadMaps(const std::string& folder, std::vector<std::
  * @param maps List of map file paths to use in scheduling games.
  */
 void CompetitiveSimulator::scheduleGames(const std::vector<std::filesystem::path>& maps) {
-    size_t N = algorithms_.size();
+    std::vector<std::string> algoNames;
+
+    {
+        std::lock_guard<std::mutex> lock(handlesMutex_);
+        for (const auto& [name, _] : algoNameToPath_) {
+            algoNames.push_back(name);
+        }
+    }
+
+    size_t N = algoNames.size();
     for (size_t k = 0; k < maps.size(); ++k) {
         for (size_t i = 0; i < N; ++i) {
             size_t j = (i + 1 + k % (N - 1)) % N;
             if (i < j) {
-                auto& algo1 = algorithms_[i];
-                auto& algo2 = algorithms_[j];
-                scheduledGames_.push_back({maps[k], algo1, algo2});
+                scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
 
                 std::lock_guard<std::mutex> lock(handlesMutex_);
-                algoUsageCounts_[algo1->name()]++;
-                algoUsageCounts_[algo2->name()]++;
+                algoUsageCounts_[algoNames[i]]++;
+                algoUsageCounts_[algoNames[j]]++;
             }
         }
     }
+}
+
+/**
+ * @brief Ensures the specified algorithm's shared library is loaded and registered.
+ *
+ * If the algorithm is not already loaded, this function dynamically loads its `.so` file
+ * using dlopen, creates its registration entry in the AlgorithmRegistrar, validates the
+ * registration, and caches the result. If the algorithm has already been loaded,
+ * the function returns immediately.
+ *
+ * On registration failure or dlopen error, the function throws a runtime exception
+ * and cleans up any partial state.
+ *
+ * Thread-safe via locking.
+ *
+ * @param name The algorithm's unique name (derived from the `.so` filename).
+ * @throws std::runtime_error if the library fails to load or registration is invalid.
+ */
+void CompetitiveSimulator::ensureAlgorithmLoaded(const std::string& name) {
+    std::lock_guard<std::mutex> lock(handlesMutex_);
+
+    if (algoPathToHandle_.count(algoNameToPath_[name])) {
+        // already loaded
+        return;
+    }
+
+    const std::string& soPath = algoNameToPath_[name];
+    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
+    if (!handle) {
+        std::cerr << "Failed to load " << soPath << ": " << dlerror() << std::endl;
+        throw std::runtime_error("Algorithm load failed");
+    }
+
+    algoPathToHandle_[soPath] = handle;
+
+    auto& registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
+    registrar.createAlgorithmFactoryEntry(name);
+
+    try {
+        registrar.validateLastRegistration();
+        algorithms_.push_back(std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(
+            registrar.end()[-1]));
+    } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
+        std::cerr << "Bad registration in " << name << ": " << e.name << std::endl;
+        registrar.removeLast();
+        dlclose(handle);
+        algoPathToHandle_.erase(soPath);
+        algoNameToPath_.erase(name);
+        algoUsageCounts_.erase(name);
+        throw;
+    }
+}
+
+/**
+ * @brief Retrieves and validates a loaded algorithm by name.
+ *
+ * Searches the internal list of successfully registered algorithms and returns
+ * the matching factory wrapper if found and fully initialized (i.e., both player
+ * and tank algorithm factories are present). Returns nullptr if not found or invalid.
+ *
+ * This is a lightweight lookup and does not attempt to load the algorithm
+ * or log errors — it is used after calling ensureAlgorithmLoaded.
+ *
+ * @param name The algorithm's name (without `.so` extension).
+ * @return Shared pointer to the algorithm factories, or nullptr on failure.
+ */
+auto CompetitiveSimulator::getValidatedAlgorithm(const std::string& name) {
+    for (const auto& algo : algorithms_) {
+        if (algo->name() == name) {
+            if (!algo->hasPlayerFactory() || !algo->hasTankAlgorithmFactory()) {
+                return nullptr;
+            }
+            return algo;
+        }
+    }
+    return nullptr;
 }
 
 /**
@@ -232,14 +276,19 @@ void CompetitiveSimulator::runGames() {
 }
 
 /**
- * @brief Runs a single game using the provided GameTask configuration.
+ * @brief Runs a single game between two algorithms on a given map.
  *
- * Currently a stub that creates a GameManager and simulates a tie result.
- * Needs to be extended to actually load the map and run the game.
+ * Lazily loads the algorithm shared libraries if not already loaded,
+ * creates players from registered factories, and executes the game
+ * via the currently loaded GameManager. At the end of the game,
+ * it updates the score and manages algorithm usage count (including
+ * unloading the shared libraries when no longer in use).
  *
- * @param task Game configuration including map, algorithm factories, and player data.
+ * If the game map fails to load, or if algorithms are not properly registered,
+ * the game is skipped and the error is logged.
+ *
+ * @param task Game configuration including map path and participating algorithms.
  */
-
 void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     auto gm = createGameManager();
 
@@ -248,25 +297,33 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     if (mapData.failedInit) { } // TODO: Implement failedInit case
 
     // Get algorithm and player factories from shared libraries
-    auto algo1 = task.algo1;
-    auto algo2 = task.algo2;
-    string name1 = algo1->name();
-    string name2 = algo2->name();
+    const std::string& name1 = task.algoName1;
+    const std::string& name2 = task.algoName2;
 
-    if (!algo1->hasPlayerFactory() || !algo1->hasTankAlgorithmFactory() ||
-        !algo2->hasPlayerFactory() || !algo2->hasTankAlgorithmFactory()) {
+    try {
+        ensureAlgorithmLoaded(name1);
+        ensureAlgorithmLoaded(name2);
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load algorithm: " << e.what() << std::endl;
+        return;
+    }
+
+    // Get the corresponding AlgorithmAndPlayerFactories
+    auto algo1 = getValidatedAlgorithm(name1);
+    auto algo2 = getValidatedAlgorithm(name2);
+    if (!algo1 || !algo2) {
         std::cerr << "Error: One of the algorithms is missing factories." << std::endl;
         return;
-        }
+    }
 
-    // Create players using factories
-    auto player1 = algo1->createPlayer(1, mapData.cols, mapData.rows, mapData.maxSteps,
-        mapData.numShells);
-    auto player2 = algo2->createPlayer(2, mapData.cols, mapData.rows, mapData.maxSteps,
-        mapData.numShells);
+    // Create players
+    auto player1 = algo1->createPlayer(1, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
+    auto player2 = algo2->createPlayer(2, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
+
 
     // Run game manager with players and factories
-    GameResult result = gm->run(mapData.cols, mapData.rows, mapData., mapData.name,
+    // TODO: Figure out how to properly create and pass satelliteView to gm
+    GameResult result = gm->run(mapData.cols, mapData.rows, std::move(mapData.satelliteView), mapData.name,
         mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
         algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
     );
@@ -294,7 +351,6 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
  * @param loser Name of the losing algorithm (if applicable).
  * @param tie True if the game ended in a tie.
  */
-
 void CompetitiveSimulator::updateScore(const std::string& winner, const std::string& loser, bool tie) {
     std::lock_guard<std::mutex> lock(scoresMutex_); // Make sure score update is thread safe
     if (tie) {
@@ -314,7 +370,6 @@ void CompetitiveSimulator::updateScore(const std::string& winner, const std::str
  * @param mapFolder Path to the folder containing map files.
  * @param gmSoPath Path to the GameManager shared library used in the simulation.
  */
-
 void CompetitiveSimulator::writeOutput(const std::string& outFolder, const std::string& mapFolder, const std::string& gmSoPath) {
     std::ofstream out(outFolder + "/competition_" + timestamp() + ".txt");
     if (!out) {
@@ -339,40 +394,8 @@ void CompetitiveSimulator::writeOutput(const std::string& outFolder, const std::
  *
  * @return std::unique_ptr to a new AbstractGameManager instance.
  */
-
 std::unique_ptr<AbstractGameManager> CompetitiveSimulator::createGameManager() {
     return gameManagerFactory_(verbose_);
-}
-
-/**
- * @brief Generates a timestamp string suitable for use in filenames.
- *
- * @return String in format YYYYMMDD_HHMMSS representing current local time.
- */
-
-std::string CompetitiveSimulator::timestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
-    return ss.str();
-}
-
-/**
- * @brief Decrements the reference count of a loaded algorithm and unloads it if no longer in use.
- *
- * @param path Path to the algorithm `.so` file to release.
- */
-
-void CompetitiveSimulator::releaseAlgorithmLib(const std::string& path) {
-    std::lock_guard<std::mutex> lock(handlesMutex_); // Make sure algo release is thread safe
-    auto it = algoLibHandles_.find(path); // Get iterator to realsed path
-    if (it != algoLibHandles_.end()) { // If not already closed
-        if (--(it->second.refCount) == 0 && it->second.handle) { // Remove
-            dlclose(it->second.handle);
-            algoLibHandles_.erase(it);
-        }
-    }
 }
 
 /**
@@ -380,15 +403,21 @@ void CompetitiveSimulator::releaseAlgorithmLib(const std::string& path) {
  *
  * @param algoName Name of the algorithm whose usage count should be decreased.
  */
-
 void CompetitiveSimulator::decreaseUsageCount(const std::string& algoName) {
     std::lock_guard<std::mutex> lock(handlesMutex_);
     auto it = algoUsageCounts_.find(algoName);
-    if (it != algoUsageCounts_.end()) {
-        if (--(it->second) == 0) {
-            const auto& soPath = algoNameToPath_[algoName];
-            releaseAlgorithmLib(soPath);
-            algoUsageCounts_.erase(it);
+    if (it == algoUsageCounts_.end()) return;
+
+    if (--(it->second) == 0) {
+        const std::string& soPath = algoNameToPath_[algoName];
+
+        auto handleIt = algoPathToHandle_.find(soPath);
+        if (handleIt != algoPathToHandle_.end()) {
+            dlclose(handleIt->second);
+            algoPathToHandle_.erase(handleIt);
         }
+
+        algoNameToPath_.erase(algoName);
+        algoUsageCounts_.erase(it);
     }
 }

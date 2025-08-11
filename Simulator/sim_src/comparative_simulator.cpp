@@ -291,6 +291,7 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
 
 
 
+
 std::string ComparativeSimulator::timestamp() {
     auto now = std::chrono::system_clock::now();
     auto t = std::chrono::system_clock::to_time_t(now);
@@ -298,3 +299,5 @@ std::string ComparativeSimulator::timestamp() {
     ss << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
     return ss.str();
 }
+
+
