@@ -30,6 +30,7 @@ private:
     vector<void*> handles_;
     MapData mapData_ = {};
 
+
     // void* algorithmHandle1_ = nullptr;
     // void* algorithmHandle2_ = nullptr;
 
@@ -47,7 +48,7 @@ private:
     bool loadSO (const string& path);
 
     void getGameManagers(const string& gameManagerFolder);
-    bool loadGameManagers(const vector<path>& gms_Paths);
+    // bool loadGameManagers(const vector<path>& gms_Paths);
     void runGames();
     void runSingleGame(const path& gmPath);
 
@@ -57,19 +58,21 @@ private:
         int count = 0;
     };
 
-
-
     vector<pair<GameResult,string>> allResults;
     vector<GameResultInfo> groups;
 
     bool sameResult(const GameResult& a, const GameResult& b) const;
     void makeGroups(vector<pair<GameResult,string>>& results);
 
-    void WriteOutput();
-    string timestamp();
+    void WriteOutput(const string& mapPath,
+                     const string& algorithmSoPath1,
+                     const string& algorithmSoPath2,
+                     const string& gmFolder);
+    string BuildOutputBuffer(const string& mapPath,
+                     const string& algorithmSoPath1,
+                     const string& algorithmSoPath2);
 
-
-
-
-
+    static string getFilename(const string& path) {
+        return std::filesystem::path(path).filename().string();
+    }
 };
