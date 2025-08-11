@@ -185,17 +185,6 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
     bool has_errors = false; // Flag to indicate if there are any errors in the file
     ofstream input_errors("input_errors.txt"); // Open file to store errors
 
-    // TODO: Figure out if this is necessary and if it is pass it to the the game manager somehow
-    // Open game log
-    fs::path actual_path(file_path);
-    string file_name = actual_path.stem().string(); // Get the file name without extension
-    gameLog_.open("output_" + file_name + ".txt");
-    if (!gameLog_.is_open()) { // Failed to create game log
-        std::cerr << "Failed to open game log file." << std::endl;
-        remove("input_errors.txt");
-        return;
-    }
-
     // Open file
     ifstream file(file_path);
     if (!file) { // Failed to open file
