@@ -8,6 +8,9 @@
 #include <chrono>
 #include <iomanip>
 #include <filesystem>
+#include <vector>
+#include <memory>
+#include <utility>
 #include <condition_variable>
 
 #include "sim_include/GameManagerRegistrar.h"
@@ -26,7 +29,7 @@ int ComparativeSimulator::run(const string& mapPath,
     algo_registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
 
     mapData_ = readMap(mapPath);
-    if (!mapData_.satelliteView) {
+    if (!mapData_.failedInit) {
         std::cerr << "Error: failed to load the map data." << std::endl;
         return 1;
     }
@@ -186,6 +189,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
     }
     auto gm_name = gm->name();
 
+    // Create players using the AlgorithmRegistrar
     auto algo1 = algo_registrar.end();
     auto algo2 = algo_registrar.begin();
 
@@ -207,8 +211,44 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         *player1, algo1->name(), *player2, algo2->name(),
         tankFactory1, tankFactory2);
 
-    gameResToGameManagers_[result].push_back(gm_name);
+    allResults.emplace_back(std::move(result), gm_name);
 
+}
+
+bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) const {
+    // Check if the winners, reasons, and rounds are the same
+    if (a.winner != b.winner || a.reason != b.reason || a.rounds != b.rounds) {
+        return false;
+    }
+    // Check if the end map is the same
+    const SatelliteView& viewA = *a.gameState;
+    const SatelliteView& viewB = *b.gameState;
+
+    for (size_t y = 0; y < mapData_.rows; y++) {
+        for (size_t x = 0; x < mapData_.cols; x++) {
+            if (viewA.getObjectAt(x,y) != viewB.getObjectAt(x,y)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results) {
+    for (auto& result : results) {
+        bool placed = false;
+        for (auto& group : groups) {
+            if (sameResult(result.first, group.result)) {
+                group.gm_names.push_back(result.second);
+                group.count += 1;
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            groups.emplace_back(std::move(result.first), vector{result.second}, 1);
+        }
+    }
 }
 
 // void ComparativeSimulator::runSingleGame(const path& gmPath) {
@@ -247,3 +287,17 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
 //     //TODO: map the game manager according to its results in gameResToGameManagers_
 //
 // }
+
+
+
+
+
+std::string ComparativeSimulator::timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
+    return ss.str();
+}
+
+
