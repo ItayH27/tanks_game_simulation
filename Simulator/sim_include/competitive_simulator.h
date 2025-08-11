@@ -8,10 +8,9 @@
 #include <mutex>
 #include "AlgorithmRegistrar.h"
 #include "GameManagerRegistration.h"
-#include "AbstractGameManager.h"
 #include "Simulator.h"
 
-class CompetitiveSimulator : Simulator {
+class CompetitiveSimulator : public Simulator {
 public:
     CompetitiveSimulator(bool verbose, size_t numThreads);
     ~CompetitiveSimulator();
@@ -26,11 +25,6 @@ private:
         std::string algoName1;
         std::string algoName2;
     };
-
-    bool verbose_;
-    size_t numThreads_;
-    void* gameManagerHandle_ = nullptr;
-    GameManagerFactory gameManagerFactory_;
 
     std::vector<std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>> algorithms_;
     std::vector<GameTask> scheduledGames_;

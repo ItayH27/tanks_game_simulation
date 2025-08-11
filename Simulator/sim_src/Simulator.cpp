@@ -1,6 +1,8 @@
 #include "../sim_include/Simulator.h"
 #include "sim_include/Simulator.h"
-#include "sim_include/Simulator.h"
+
+Simulator::Simulator(bool verbose, size_t numThreads)
+    : verbose_(verbose), numThreads_(numThreads) {}
 
 /**
  * @brief Extracts an integer value from a configuration line in the map file.

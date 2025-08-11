@@ -13,7 +13,7 @@
 #include "sim_include/Simulator.h"
 
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
-    : verbose_(verbose), numThreads_(numThreads) {}
+    : Simulator(verbose, numThreads) {}
 
 CompetitiveSimulator::~CompetitiveSimulator() {
     std::lock_guard<std::mutex> lock(handlesMutex_);
@@ -52,14 +52,15 @@ int CompetitiveSimulator::run(const std::string& mapsFolder,
 
     // Load algorithms using folder path
     if (!getAlgorithms(algorithmsFolder)) { // Make sure there are least 2 algorithms
-        std::cerr << "Error: Need at least 2 algorithms for competition." << std::endl;
+        std::cerr << "Usage: At least two algorithms must be present in folder: " << algorithmsFolder << std::endl;
         return 1;
     }
 
     // Load maps into vector
     std::vector<std::filesystem::path> maps;
     if (!loadMaps(mapsFolder, maps)) {
-        std::cerr << "Error: No maps found in folder: " << mapsFolder << std::endl;
+        std::cerr << "Usage Error: No valid map files found in folder: " << mapsFolder << "\n"
+          << "Make sure the folder exists and contains at least one valid map file." << std::endl;
         return 1;
     }
 
@@ -82,6 +83,8 @@ bool CompetitiveSimulator::loadGameManager(const std::string& soPath) {
         std::cerr << "dlopen failed: " << dlerror() << std::endl;
         return false;
     }
+
+    return true;
 }
 
 /**
@@ -150,6 +153,11 @@ void CompetitiveSimulator::scheduleGames(const std::vector<std::filesystem::path
 
     size_t N = algoNames.size();
     for (size_t k = 0; k < maps.size(); ++k) {
+        // Skip duplicated round if N is even and k == N / 2 - 1
+        if (N % 2 == 0 && k == N / 2 - 1) {
+            continue;
+        }
+
         for (size_t i = 0; i < N; ++i) {
             size_t j = (i + 1 + k % (N - 1)) % N;
             if (i < j) {
@@ -190,8 +198,11 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const std::string& name) {
     const std::string& soPath = algoNameToPath_[name];
     void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
     if (!handle) {
-        std::cerr << "Failed to load " << soPath << ": " << dlerror() << std::endl;
-        throw std::runtime_error("Algorithm load failed");
+        {
+            std::lock_guard<std::mutex> errLock(stderrMutex_);
+            std::cerr << "Error: Failed to load algorithm " << soPath << ": " << dlerror() << std::endl;
+        }
+        return;
     }
 
     algoPathToHandle_[soPath] = handle;
@@ -204,7 +215,10 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const std::string& name) {
         algorithms_.push_back(std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(
             registrar.end()[-1]));
     } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
-        std::cerr << "Bad registration in " << name << ": " << e.name << std::endl;
+        {
+            std::lock_guard<std::mutex> errLock(stderrMutex_);
+            std::cerr << "Bad registration in " << name << ": " << e.name << std::endl;
+        }
         registrar.removeLast();
         dlclose(handle);
         algoPathToHandle_.erase(soPath);
@@ -294,7 +308,11 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
 
     std::filesystem::path mapPath = task.mapPath;
     MapData mapData = readMap(mapPath);
-    if (mapData.failedInit) { } // TODO: Implement failedInit case
+    if (mapData.failedInit) {
+        std::lock_guard<std::mutex> lock(stderrMutex_);
+        std::cerr << "Failed to load map: " << mapPath << std::endl;
+        return;
+    }
 
     // Get algorithm and player factories from shared libraries
     const std::string& name1 = task.algoName1;
@@ -304,7 +322,8 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         ensureAlgorithmLoaded(name1);
         ensureAlgorithmLoaded(name2);
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load algorithm: " << e.what() << std::endl;
+        std::lock_guard<std::mutex> lock(stderrMutex_);
+        std::cerr << "Failed to load algorithm(s) for game on map: " << mapPath << "\n" << "Reason: " << e.what() << std::endl;
         return;
     }
 
@@ -312,7 +331,9 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     auto algo1 = getValidatedAlgorithm(name1);
     auto algo2 = getValidatedAlgorithm(name2);
     if (!algo1 || !algo2) {
-        std::cerr << "Error: One of the algorithms is missing factories." << std::endl;
+        std::lock_guard<std::mutex> lock(stderrMutex_);
+        std::cerr << "Error: Missing factories for one of the algorithms while running map: " << mapPath << "\n"
+              << "Algorithms: " << name1 << " vs. " << name2 << std::endl;
         return;
     }
 
@@ -322,8 +343,7 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
 
 
     // Run game manager with players and factories
-    // TODO: Figure out how to properly create and pass satelliteView to gm
-    GameResult result = gm->run(mapData.cols, mapData.rows, std::move(mapData.satelliteView), mapData.name,
+    GameResult result = gm->run(mapData.cols, mapData.rows, *mapData.satelliteView, mapData.name,
         mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
         algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
     );

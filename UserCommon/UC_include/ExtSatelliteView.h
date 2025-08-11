@@ -1,6 +1,6 @@
 #pragma once
 
-# include "../common/SatelliteView.h"
+# include "../../common/SatelliteView.h"
 # include <vector>
 
 using std::vector;
