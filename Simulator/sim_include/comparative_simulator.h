@@ -51,6 +51,19 @@ private:
     void runGames();
     void runSingleGame(const path& gmPath);
 
+    struct GameResultInfo {
+        GameResult result;
+        vector<string> gm_names;
+        int count = 0;
+    };
+
+
+
+    vector<pair<GameResult,string>> allResults;
+    vector<GameResultInfo> groups;
+
+    bool sameResult(const GameResult& a, const GameResult& b) const;
+    void makeGroups(vector<pair<GameResult,string>>& results);
 
     void WriteOutput();
     string timestamp();
