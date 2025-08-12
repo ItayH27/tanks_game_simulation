@@ -137,6 +137,12 @@ tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, 
         for (int j = 0; j < mapData.cols; ++j) { // Iterate through each cell in the line
             char cell = (j < static_cast<int>(line.size())) ? line[j] : ' ';  // Fill missing columns with spaces
             gameBoard[i][j] = cell; // Update the gameboard with the new cell
+
+            if (cell != '#' && cell != '@' && cell != ' ') { // Unknown character
+                inputErrors << "Error recovered from: Unknown character '" << cell << "' at row " << i << ", column " << j << ". Treated as space.\n";
+                cell = ' ';
+                hasErrors = true;
+            }
         }
 
         ++i;

@@ -781,11 +781,60 @@ void GM_209277367_322542887::checkShellsCollide() {
     }
 }
 
+bool GM_209277367_322542887::initiateGame(unique_ptr<SatelliteView> gameBoard, int width, int height) {
+    int tank_1_count = 0, tank_2_count = 0;
+    gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
+
+    for (int i = 0; i < height_; ++i) {
+        for (int j = 0; j < width_; ++j) { // Iterate through each cell in the line
+            char cell = gameBoard.getObjectAt(i, j);
+
+            if (cell == '1') { // Cell contains a tank of player 1
+                auto tank = player1TankFactory_->create(1, tank_1_count); // Create a new tank for player 1
+                auto tank_info = make_unique<TankInfo>(tank_1_count, make_pair(j, i), numShells_, 1, std::move(tank));
+                tanks_.push_back(std::move(tank_info)); // Add tank 1 to vector
+                ++tank_1_count;
+
+            } else if (cell == '2') {
+                // Cell contains a tank of player 2
+                auto tank = player2TankFactory_->create(2, tank_2_count); // Create a new tank for player 2
+                auto tank_info = make_unique<TankInfo>(tank_2_count, make_pair(j, i), numShells_, 2, std::move(tank));
+                tanks_.push_back(std::move(tank_info)); // Add tank 2 to vector
+                ++tank_2_count;
+            }
+
+            gameboard_[i][j] = cell; // Update the gameboard with the new cell
+        }
+    }
+
+    if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination
+    if (tank_1_count == 0 && tank_2_count == 0) {
+        gameLog_ << "Tie, both players have zero tanks\n";
+    } else {
+        int winner = (tank_1_count == 0) ? 2 : 1;
+        size_t remaining = (winner == 1) ? tank_1_count : tank_2_count;
+        gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
+    }
+
+        // Update the game state and flush the logs
+        gameOver_ = true;
+        gameLog_.flush();
+        gameLog_.close();
+    }
+    return true;
+}
+
 // Function to run the game
 void GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
         size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
         TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0) {
-    // Initialize players
+    width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = player1, player2_ = player2;
+    player1TankFactory_ = &player1_tank_algo_factory;
+    player2TankFactory_ = player2_tank_algo_factory ? &player2_tank_algo_factory : &player1_tank_algo_factory;
+
+    initiateGame(map, map_width, map_height); // Copy game board and initiate tanks
+
+    // Initialize tanks
     player1_ = playerFactory_->create(1, width_, height_, maxSteps_, numShells_);
     player2_ = playerFactory_->create(2, width_, height_, maxSteps_, numShells_);
 

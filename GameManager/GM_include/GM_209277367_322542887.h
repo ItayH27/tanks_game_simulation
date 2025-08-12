@@ -12,6 +12,7 @@
 #include "../common/SatelliteView.h"
 #include "../common/Player.h"
 #include "TankInfo.h"
+#include "../../UserCommon/UC_include/ExtSatelliteView.h"
 #include "../UserCommon/UC_include/Shell.h"
 #include "../common/ActionRequest.h"
 
@@ -48,7 +49,8 @@ namespace GameManager_209277367_322542887 {
 
     private:
         unique_ptr<PlayerFactory> playerFactory_; // Factory for creating players
-        unique_ptr<TankAlgorithmFactory> tankFactory_; // Factory for creating tank algorithms
+        unique_ptr<TankAlgorithmFactory> player1TankFactory_; // Factory for creating tank algorithms
+        unique_ptr<TankAlgorithmFactory> player2TankFactory_;
         unique_ptr<SatelliteView> satellite_view_; // Satellite view for the game
         unique_ptr<Player> player1_; // Player 1
         unique_ptr<Player> player2_; // Player 2
@@ -102,6 +104,7 @@ namespace GameManager_209277367_322542887 {
         void updateGameLog();
         void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
             unique_ptr<SatelliteView> game_state, size_t rounds);
+        bool initiateGame(unique_ptr<SatelliteView> gameBoard,  int width, int height);
 
         // void writeBoardToJson() const; // Visualisation
     };
