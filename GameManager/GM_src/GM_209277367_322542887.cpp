@@ -65,11 +65,14 @@ REGISTER_GAME_MANAGER(GM_209277367_322542887);
 // void GM_209277367_322542887::setVisualMode(const bool visual_mode) { this->visualMode_ = visual_mode; }
 
 // Constructor for GameManager class
-GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
-        std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
-    player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
-    turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
-    // visualMode_(false)
+// GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
+//         std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
+//     player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
+//     turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
+//     // visualMode_(false)
+
+GM_209277367_322542887::GM_209277367_322542887(bool verbose) : verbose_(verbose) {}
+
 
 
 // Extract relevant value from a line of text
@@ -779,7 +782,9 @@ void GM_209277367_322542887::checkShellsCollide() {
 }
 
 // Function to run the game
-void GM_209277367_322542887::run() {
+void GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
+        size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
+        TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0) {
     // Initialize players
     player1_ = playerFactory_->create(1, width_, height_, maxSteps_, numShells_);
     player2_ = playerFactory_->create(2, width_, height_, maxSteps_, numShells_);

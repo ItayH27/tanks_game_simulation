@@ -13,6 +13,7 @@
 #include "../common/Player.h"
 #include "TankInfo.h"
 #include "../UserCommon/UC_include/Shell.h"
+#include "../common/ActionRequest.h"
 
 #define GAME_OVER_NO_AMMO 40 // Number of turns to wait after no ammo condition is met
 #define NUM_OF_DIRECTIONS 8 // Number of directions
@@ -30,7 +31,7 @@ using ShellIterator = std::vector<std::unique_ptr<Shell>>::iterator;
 namespace GameManager_209277367_322542887 {
     class GM_209277367_322542887 {
     public:
-        GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory); // Constructor
+        GM_209277367_322542887(bool verbose); // Constructor
         GM_209277367_322542887& operator=(const GM_209277367_322542887&) = delete; // Copy assignment
         GM_209277367_322542887(GM_209277367_322542887&&) noexcept = delete; // Move constructor
         GM_209277367_322542887& operator=(GM_209277367_322542887&&) noexcept = delete; // Move assignment
@@ -38,7 +39,9 @@ namespace GameManager_209277367_322542887 {
 
         void readBoard(const string& file_path);
         bool failedInit() const;
-        void run(); // Function to start the game
+        void run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
+            size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
+            TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0);
         pair<int, int> getGameboardSize() const;
 
         void setVisualMode(bool visual_mode); // Visualisation
