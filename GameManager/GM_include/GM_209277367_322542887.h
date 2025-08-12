@@ -6,15 +6,16 @@
 #include <set>
 #include <iostream>
 
-#include "GameResult.h"
-#include "PlayerFactory.h" // FIX
-#include "TankAlgorithmFactory.h" // FIX
+#include "../../common/GameResult.h"
+#include "../common/PlayerFactory.h" // FIX
+#include "../../common/TankAlgorithm.h" // FIX
 #include "../common/SatelliteView.h"
 #include "../common/Player.h"
 #include "TankInfo.h"
 #include "../../UserCommon/UC_include/ExtSatelliteView.h"
 #include "../UserCommon/UC_include/Shell.h"
 #include "../common/ActionRequest.h"
+#include "../../common/SatelliteView.h"
 
 #define GAME_OVER_NO_AMMO 40 // Number of turns to wait after no ammo condition is met
 #define NUM_OF_DIRECTIONS 8 // Number of directions
@@ -48,10 +49,9 @@ namespace GameManager_209277367_322542887 {
         void setVisualMode(bool visual_mode); // Visualisation
 
     private:
-        unique_ptr<PlayerFactory> playerFactory_; // Factory for creating players
-        unique_ptr<TankAlgorithmFactory> player1TankFactory_; // Factory for creating tank algorithms
-        unique_ptr<TankAlgorithmFactory> player2TankFactory_;
-        unique_ptr<SatelliteView> satellite_view_; // Satellite view for the game
+        function<std::unique_ptr<TankAlgorithm>(int, int)> player1TankFactory_; // Factory for creating tank algorithms
+        function<std::unique_ptr<TankAlgorithm>(int, int)> player2TankFactory_;
+        unique_ptr<SatelliteView> satellite_view_ = nullptr; // Satellite view for the game
         unique_ptr<Player> player1_; // Player 1
         unique_ptr<Player> player2_; // Player 2
         vector<vector<char>> gameboard_; // Game board represented as a 2D vector
@@ -59,18 +59,16 @@ namespace GameManager_209277367_322542887 {
         set<size_t> destroyedTanksIndices_; // Set of tank indices to delete
         vector<unique_ptr<Shell>> shells_; // Shells fired by tanks
         ofstream gameLog_; // Log file for game events
-        ofstream errorLog_; // Log file for errors
         GameResult gameResult_;
         int numShells_{}; // Number of shells for each tank
         int maxSteps_{}; // Maximum steps for the game
-        bool failedInit_; // Flag to indicate if initialization failed
         bool gameOver_; // Flag to indicate if the game is over
         int width_{}; // Width of the game board
         int height_{}; // Height of the game board
-        int turn_; // Current turn number
-        bool noAmmoFlag_; // Flag to indicate if all tanks are out of ammo
+        int turn_{}; // Current turn number
+        bool noAmmoFlag_ = false; // Flag to indicate if all tanks are out of ammo
         size_t gameOverStatus_{}; // Status indicating the reason for game over
-        size_t noAmmoTimer_; // Timer for no ammo condition
+        size_t noAmmoTimer_ = false; // Timer for no ammo condition
         size_t numTanks1_ = 0;
         size_t numTanks2_ = 0;
         vector<vector<char>> lastRoundGameboard_;
@@ -105,6 +103,10 @@ namespace GameManager_209277367_322542887 {
         void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
             unique_ptr<SatelliteView> game_state, size_t rounds);
         bool initiateGame(unique_ptr<SatelliteView> gameBoard,  int width, int height);
+        void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell);
+        bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator& it);
+        bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it);
+        void GM_209277367_322542887::handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it);
 
         // void writeBoardToJson() const; // Visualisation
     };
