@@ -1,0 +1,18 @@
+docker run -it --rm \
+    -v $(pwd):/workspace \
+    tanks-ubuntu2204:latest \
+    /bin/bash
+
+cmake -S . -B build && cmake --build build -j
+
+./simulator_209277367_322542887 -comparative game_map=1_maps \
+  game_managers_folder=game_managers_bin \
+  algorithm1=algorithms_bin/Algorithm_209277367_322542887.so \
+  algorithm2=algorithms_bin/Algorithm_209277367_322542887.so \
+  num_threads=4 -verbose
+
+./Simulator/bin/simulator_209277367_322542887 -competition \
+    game_maps_folder=1_maps \
+    game_manager=1_gm_so/GameManager_209277367_322542887.so \
+    algorithms_folder=1_algo_so \
+    num_threads=4 -verbose
