@@ -1,161 +1,165 @@
 #include "../sim_include/cmd_parser.h"
-#include <iostream>
+
 #include <filesystem>
-#include <sstream>
-#include <regex>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace fs = std::filesystem;
 
 namespace {
+    using ParseResult = CmdParser::ParseResult;
 
-    /**
-     * @brief Checks whether the given path is a valid regular file.
-     *
-     * @param path The file path to check.
-     * @return true if the path exists and is a regular file, false otherwise.
-     */
-    bool isFileValid(const std::string& path) {
-        return fs::exists(path) && fs::is_regular_file(path);
+    // ---- filesystem helpers ----
+    inline bool isFileValid(const std::string& path) {
+        std::error_code ec;
+        return fs::exists(path, ec) && fs::is_regular_file(path, ec);
     }
 
-    /**
-     * @brief Checks whether the given path is a non-empty directory.
-     *
-     * @param path The folder path to check.
-     * @return true if the path exists, is a directory, and is not empty.
-     */
-    bool isFolderValid(const std::string& path) {
-        return fs::exists(path) && fs::is_directory(path) && !fs::is_empty(path);
+    inline bool isFolderValid(const std::string& path) {
+        std::error_code ec;
+        return fs::exists(path, ec) && fs::is_directory(path, ec) && !fs::is_empty(path, ec);
     }
 
-    /**
-     * @brief Trims leading and trailing spaces and tabs from a string.
-     *
-     * @param s The input string.
-     * @return A new trimmed string.
-     */
-    std::string trim(const std::string& s) {
-        auto start = s.find_first_not_of(" \t");
-        auto end = s.find_last_not_of(" \t");
-        return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+    // ---- token helpers ----
+    // Parse "key=value" (no spaces). On error returns {"",""}.
+    inline std::pair<std::string, std::string> parseKeyVal(const std::string& tok) {
+        const std::size_t eq = tok.find('=');
+        if (eq == std::string::npos || eq == 0 || eq + 1 == tok.size()) return {"", ""};
+        return {tok.substr(0, eq), tok.substr(eq + 1)};
     }
 
-    /**
-     * @brief Parses a command-line argument of the form key=value.
-     *
-     * Assumes there are no spaces around '='. Returns an empty pair if format is invalid.
-     *
-     * @param arg The argument string to parse.
-     * @return A pair of strings: {key, value}, or {"", ""} if invalid.
-     */
-    std::pair<std::string, std::string> parseArg(const std::string& arg) {
-        size_t eqPos = arg.find('=');
-        if (eqPos == std::string::npos || eqPos == 0 || eqPos == arg.length() - 1)
-            return {"", ""}; // invalid format
-        return { arg.substr(0, eqPos), arg.substr(eqPos + 1) };
-    }
-
-    /**
-     * @brief Validates required arguments for comparative mode.
-     *
-     * @param args Parsed argument map.
-     * @param result The output ParseResult to populate.
-     * @return A populated ParseResult indicating success or failure.
-     */
-    CmdParser::ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args, CmdParser::ParseResult& result) {
-        const std::vector<std::string> required = {"game_map", "game_managers_folder", "algorithm1", "algorithm2"};
-        for (const auto& key : required)
-            if (!args.count(key)) return {false, "Missing required argument: " + key};
-
-        result.gameMapFile = args.at("game_map");
-        result.gameManagersFolder = args.at("game_managers_folder");
-        result.algorithm1File = args.at("algorithm1");
-        result.algorithm2File = args.at("algorithm2");
-        if (args.count("num_threads")) result.numThreads = std::stoi(args.at("num_threads"));
-
-        if (!isFileValid(result.gameMapFile)) return {false, "Invalid or missing file: " + result.gameMapFile};
-        if (!isFolderValid(result.gameManagersFolder)) return {false, "Invalid folder: " + result.gameManagersFolder};
-        if (!isFileValid(result.algorithm1File)) return {false, "Invalid or missing file: " + result.algorithm1File};
-        if (!isFileValid(result.algorithm2File)) return {false, "Invalid or missing file: " + result.algorithm2File};
-
-        result.valid = true;
-        return result;
-    }
-
-    /**
-     * @brief Validates required arguments for competition mode.
-     *
-     * @param args Parsed argument map.
-     * @param result The output ParseResult to populate.
-     * @return A populated ParseResult indicating success or failure.
-     */
-    CmdParser::ParseResult validateCompetition(const std::unordered_map<std::string, std::string>& args, CmdParser::ParseResult& result) {
-        const std::vector<std::string> required = {"game_maps_folder", "game_manager", "algorithms_folder"};
-        for (const auto& key : required)
-            if (!args.count(key)) return {false, "Missing required argument: " + key};
-
-        result.gameMapsFolder = args.at("game_maps_folder");
-        result.gameManagerFile = args.at("game_manager");
-        result.algorithmsFolder = args.at("algorithms_folder");
-        if (args.count("num_threads")) result.numThreads = std::stoi(args.at("num_threads"));
-
-        if (!isFolderValid(result.gameMapsFolder)) return {false, "Invalid folder: " + result.gameMapsFolder};
-        if (!isFileValid(result.gameManagerFile)) return {false, "Invalid file: " + result.gameManagerFile};
-        if (!isFolderValid(result.algorithmsFolder)) return {false, "Invalid folder: " + result.algorithmsFolder};
-
-        result.valid = true;
-        return result;
-    }
-}
-
-/**
- * @brief Parses the command-line arguments into structured simulator parameters.
- *
- * Determines whether comparative or competition mode is used, validates inputs,
- * and returns a populated ParseResult.
- *
- * @param argc Number of arguments.
- * @param argv Array of argument strings.
- * @return A ParseResult indicating success or failure and containing parsed values.
- */
-CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
-    ParseResult result;
-    std::unordered_map<std::string, std::string> args;
-    bool hasComparative = false, hasCompetition = false;
-
-    auto processToken = [&](const std::string& token) {
-        if (token == "-comparative") hasComparative = true;
-        else if (token == "-competition") hasCompetition = true;
-        else if (token == "-verbose") result.verbose = true;
-        else {
-            auto [key, value] = parseArg(token);
-            if (!key.empty() && !value.empty()) args[key] = value;
-            else { result.errorMessage = "Unsupported argument format: " + token; }
+    // Parse num_threads if provided. Returns true on success and writes dst.
+    inline bool parseNumThreads(const std::unordered_map<std::string, std::string>& args, std::optional<int>& dst) {
+        auto it = args.find("num_threads");
+        if (it == args.end()) return true; // not provided → OK
+        // Accept only decimal positive integers (stoi throws on junk; we guard).
+        const std::string& s = it->second;
+        if (s.empty()) return false;
+        int signFree = 0;
+        for (char c : s) {
+            if (c < '0' || c > '9') return false;
+            signFree = 1;
         }
-    };
+        if (!signFree) return false;
+        try {
+            int v = std::stoi(s);
+            dst = v;
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
 
-    for (int i = 1; i < argc && result.errorMessage.empty(); ++i)
-        processToken(argv[i]);
+    // ---- mode validators ----
+    ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
+        static const std::vector<std::string> required = {
+            "game_map", "game_managers_folder", "algorithm1", "algorithm2"
+        };
+        for (const auto& k : required) {
+            if (args.find(k) == args.end()) return ParseResult::fail("Missing required argument: " + k);
+        }
 
-    if (hasComparative == hasCompetition)
-        return {false, "Exactly one of -comparative or -competition must be specified."};
+        out.gameMapFile        = args.at("game_map");
+        out.gameManagersFolder = args.at("game_managers_folder");
+        out.algorithm1File     = args.at("algorithm1");
+        out.algorithm2File     = args.at("algorithm2");
 
-    result.mode = hasComparative ? Mode::Comparative : Mode::Competition;
-    return result.mode == Mode::Comparative
-           ? validateComparative(args, result)
-           : validateCompetition(args, result);
+        if (!parseNumThreads(args, out.numThreads))
+            return ParseResult::fail("Invalid value for num_threads (must be a positive integer).");
+
+        if (!isFileValid(out.gameMapFile))
+            return ParseResult::fail("Invalid or missing file: " + out.gameMapFile);
+        if (!isFolderValid(out.gameManagersFolder))
+            return ParseResult::fail("Invalid folder: " + out.gameManagersFolder);
+        if (!isFileValid(out.algorithm1File))
+            return ParseResult::fail("Invalid or missing file: " + out.algorithm1File);
+        if (!isFileValid(out.algorithm2File))
+            return ParseResult::fail("Invalid or missing file: " + out.algorithm2File);
+
+        out.valid = true;
+        return out;
+    }
+
+    ParseResult validateCompetition(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
+        static const std::vector<std::string> required = {
+            "game_maps_folder", "game_manager", "algorithms_folder"
+        };
+        for (const auto& k : required) {
+            if (args.find(k) == args.end()) return ParseResult::fail("Missing required argument: " + k);
+        }
+
+        out.gameMapsFolder   = args.at("game_maps_folder");
+        out.gameManagerFile  = args.at("game_manager");
+        out.algorithmsFolder = args.at("algorithms_folder");
+
+        if (!parseNumThreads(args, out.numThreads))
+            return ParseResult::fail("Invalid value for num_threads (must be a positive integer).");
+
+        if (!isFolderValid(out.gameMapsFolder))
+            return ParseResult::fail("Invalid folder: " + out.gameMapsFolder);
+        if (!isFileValid(out.gameManagerFile))
+            return ParseResult::fail("Invalid file: " + out.gameManagerFile);
+        if (!isFolderValid(out.algorithmsFolder))
+            return ParseResult::fail("Invalid folder: " + out.algorithmsFolder);
+
+        out.valid = true;
+        return out;
+    }
+} // namespace
+
+// ---- CmdParser implementation ----
+CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
+    ParseResult res;
+    res.mode = Mode::None;
+
+    bool wantComparative = false;
+    bool wantCompetition = false;
+
+    std::unordered_map<std::string, std::string> kv;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string token = argv[i];
+
+        if (token == "-comparative") {
+            wantComparative = true;
+            continue;
+        }
+        if (token == "-competition") {
+            wantCompetition = true;
+            continue;
+        }
+        if (token == "-verbose") {
+            res.verbose = true;
+            continue;
+        }
+
+        auto [k, v] = parseKeyVal(token);
+        if (k.empty()) {
+            return ParseResult::fail("Unsupported argument format: " + token);
+        }
+        kv[std::move(k)] = std::move(v);
+    }
+
+    if (wantComparative == wantCompetition) {
+        return ParseResult::fail("Exactly one of -comparative or -competition must be specified.");
+    }
+
+    res.mode = wantComparative ? Mode::Comparative : Mode::Competition;
+    return (res.mode == Mode::Comparative)
+        ? validateComparative(kv, res)
+        : validateCompetition(kv, res);
 }
 
-/**
- * @brief Prints usage instructions for the simulator.
- */
 void CmdParser::printUsage() {
-    std::cout << "Usage:\n";
-    std::cout << "  ./simulator_<ids> -comparative "
-              << "game_map=<file> game_managers_folder=<folder> "
-              << "algorithm1=<file> algorithm2=<file> "
-              << "[num_threads=<n>] [-verbose]\n\n";
-    std::cout << "  ./simulator_<ids> -competition "
-              << "game_maps_folder=<folder> game_manager=<file> "
-              << "algorithms_folder=<folder> [num_threads=<n>] [-verbose]\n";
+    std::cout
+        << "Usage:\n"
+        << "  ./simulator_<ids> -comparative "
+           "game_map=<file> game_managers_folder=<folder> "
+           "algorithm1=<file> algorithm2=<file> "
+           "[num_threads=<n>] [-verbose]\n\n"
+        << "  ./simulator_<ids> -competition "
+           "game_maps_folder=<folder> game_manager=<file> "
+           "algorithms_folder=<folder> [num_threads=<n>] [-verbose]\n";
 }

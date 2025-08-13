@@ -240,7 +240,7 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
  * @param name The algorithm's name (without `.so` extension).
  * @return Shared pointer to the algorithm factories, or nullptr on failure.
  */
-auto CompetitiveSimulator::getValidatedAlgorithm(const string& name) {
+shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> CompetitiveSimulator::getValidatedAlgorithm(const string& name) {
     for (const auto& algo : algorithms_) {
         if (algo->name() == name) {
             if (!algo->hasPlayerFactory() || !algo->hasTankAlgorithmFactory()) {

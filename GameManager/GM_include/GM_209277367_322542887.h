@@ -15,7 +15,6 @@
 #include "../common/SatelliteView.h"
 #include "../common/Player.h"
 #include "TankInfo.h"
-#include "../../UserCommon/UC_include/ExtSatelliteView.h"
 #include "../UserCommon/UC_include/Shell.h"
 #include "../common/ActionRequest.h"
 #include "../../common/SatelliteView.h"
@@ -32,7 +31,7 @@
 #define TIMER_GAME_OVER 1
 #define ALL_TANKS_DEAD 0
 
-using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl;
+using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl, std::move;
 using TankIterator = std::vector<std::unique_ptr<TankInfo>>::iterator;
 using ShellIterator = std::vector<std::unique_ptr<Shell>>::iterator;
 namespace fs = std::filesystem;

@@ -1,5 +1,4 @@
-#include "../sim_include/Simulator.h"
-#include "sim_include/Simulator.h"
+#include "Simulator.h"
 
 Simulator::Simulator(bool verbose, size_t numThreads)
     : verbose_(verbose), numThreads_(numThreads) {}

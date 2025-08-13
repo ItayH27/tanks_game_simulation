@@ -6,7 +6,7 @@
 
 class CmdParser {
 public:
-    enum class Mode { Comparative, Competition };
+    enum class Mode { None, Comparative, Competition };
 
     struct ParseResult {
         bool valid = false;
@@ -22,6 +22,18 @@ public:
         std::string algorithmsFolder;
         std::optional<int> numThreads;
         bool verbose = false;
+
+        static ParseResult fail(std::string msg) {
+            ParseResult r;
+            r.valid = false;
+            r.errorMessage = std::move(msg);
+            return r;
+        }
+        int effectiveThreads() const {
+            // Spec: if missing or 1 → single thread (main only):contentReference[oaicite:1]{index=1}.
+            if (!numThreads || *numThreads <= 1) return 1;
+            return *numThreads;
+        }
     };
 
     static ParseResult parse(int argc, char** argv);

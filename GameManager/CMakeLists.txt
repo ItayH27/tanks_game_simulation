@@ -23,7 +23,6 @@
 # - common/UserCommon layout and auto-registration division of labor.
 #
 
-
 cmake_minimum_required(VERSION 3.16)
 project(GameManagerProj LANGUAGES CXX)
 
@@ -55,7 +54,21 @@ if(GM_SOURCES STREQUAL "")
 endif()
 
 set(TARGET_NAME GameManager_${SUBMITTER_IDS})
-add_library(${TARGET_NAME} SHARED ${GM_SOURCES})
+add_library(${TARGET_NAME} SHARED ${GM_SOURCES}
+        ../UserCommon/UC_src/ExtSatelliteView.cpp)
+
+# Pull in your shared implementations so their vtables live inside the GM .so
+file(GLOB USERCOMMON_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_src/*.cpp
+)
+
+if(USERCOMMON_SOURCES STREQUAL "")
+    message(FATAL_ERROR "No sources under ../UserCommon/UC_src")
+endif()
+
+# We already expose headers via target_include_directories (kept as‑is)
+# Compile the implementations into the GM .so:
+target_sources(${TARGET_NAME} PRIVATE ${USERCOMMON_SOURCES})
 
 # Exact filename required by the assignment (no 'lib' prefix on Linux)
 set_target_properties(${TARGET_NAME} PROPERTIES

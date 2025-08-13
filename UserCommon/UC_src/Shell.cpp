@@ -1,4 +1,4 @@
-#include "UC_include/Shell.h"
+#include "Shell.h"
 
 // Constructors
 Shell::Shell(int x, int y, const Direction dir) : location_(x, y), direction_(dir), aboveMine_(false) {}

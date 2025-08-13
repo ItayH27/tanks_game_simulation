@@ -52,9 +52,8 @@ private:
     bool loadMaps(const string& folder, vector<fs::path>& outMaps);
     void scheduleGames(const vector<fs::path>& maps);
     void runGames();
-    void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name);
-    shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>
-        CompetitiveSimulator::getValidatedAlgorithm(const string& name);
+    void ensureAlgorithmLoaded(const string& name);
+    shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> getValidatedAlgorithm(const string& name);
     void runSingleGame(const GameTask& task);
     void updateScore(const string& winnerName, const string& loserName, bool tie);
     void writeOutput(const string& outFolder, const string& mapFolder, const string& gmSoName);
