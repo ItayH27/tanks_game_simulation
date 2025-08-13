@@ -1,6 +1,6 @@
-#include "Algo_include/Player_209277367_322542887.h"
+#include "Player_209277367_322542887.h"
 #include "../common/PlayerRegistration.h"
-#include "Algo_include/TankAlgorithm_209277367_322542887.h"
+#include "TankAlgorithm_209277367_322542887.h"
 
 using namespace Algorithm_209277367_322542887;
 REGISTER_PLAYER(Player_209277367_322542887);
