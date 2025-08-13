@@ -534,7 +534,7 @@ void GM_209277367_322542887::checkShellsCollide() {
     }
 }
 
-bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard, int width, int height) {
+bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard) {
     int tank_1_count = 0, tank_2_count = 0;
     gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
 
@@ -578,11 +578,12 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
         size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
         TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory) {
 
+    (void)name1, (void)name2, (void)map_name;
     width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = &player1, player2_ = &player2;
     player1TankFactory_ = player1_tank_algo_factory;
     player2TankFactory_ = player2_tank_algo_factory;
 
-    initiateGame(map, map_width, map_height); // Copy game board and initiate tanks
+    initiateGame(map); // Copy game board and initiate tanks
 
     std::cout << "\nGame Started!" << endl;
 
