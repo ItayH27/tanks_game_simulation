@@ -5,7 +5,7 @@
 
 using std::vector;
 
-class GameManager_209277367_322542887; // Forward declaration of GameManager class
+// class GM_209277367_322542887; // Forward declaration of GameManager class
 
 class ExtSatelliteView final : public SatelliteView {
     size_t width_;

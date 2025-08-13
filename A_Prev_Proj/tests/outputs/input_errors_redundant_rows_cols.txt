@@ -1,4 +1,0 @@
-Error recovered from: Extra 7 columns at row 0 ignored.
-Error recovered from: Extra 6 columns at row 1 ignored.
-Error recovered from: Extra 1 rows beyond declared height ignored.
-Error recovered from: Extra 13 columns beyond declared width ignored.

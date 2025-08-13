@@ -34,8 +34,6 @@ protected:
 
     bool verbose_;
     size_t numThreads_;
-    void* gameManagerHandle_ = nullptr;
-    GameManagerFactory gameManagerFactory_;
     std::mutex stderrMutex_;
 
     MapData readMap(const std::string& file_path);

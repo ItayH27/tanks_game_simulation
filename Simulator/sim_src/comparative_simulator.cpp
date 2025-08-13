@@ -19,7 +19,7 @@
 using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_iterator, std::ofstream, std::ostringstream, std::ranges::sort;
 
 ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
-    : verbose_(verbose), numThreads_(numThreads) {
+    : Simulator(verbose, numThreads) {
 }
 
 ComparativeSimulator::~ComparativeSimulator() {
@@ -53,7 +53,7 @@ int ComparativeSimulator::run(const string& mapPath,
     // loadGameManagers(gms_paths_);
 
     runGames();
-    WriteOutput(mapPath, algorithmSoPath1, algorithmSoPath2, gmFolder);
+    writeOutput(mapPath, algorithmSoPath1, algorithmSoPath2, gmFolder);
 
     return 0;
 }
@@ -255,7 +255,7 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
             }
         }
         if (!placed) {
-            groups.emplace_back(std::move(result.first), vector{result.second}, 1);
+            groups.push_back({ std::move(result.first), { result.second }, 1 });
         }
     }
 }
@@ -290,6 +290,18 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
     outFile.close();
 }
 
+
+static void printSatellite(std::ostream& os,
+                           const SatelliteView& view,
+                           size_t width, size_t height) {
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width;  ++x) {
+            os << view.getObjectAt(x, y);
+        }
+        os << '\n';
+    }
+}
+
 string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
                                                  const string& algorithmSoPath1,
                                                  const string& algorithmSoPath2) {
@@ -306,14 +318,19 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         for (int i = 0; i < group.gm_names.size()-1 ; i++) {
             oss << group.gm_names[i] << ", ";
         }
-        oss << group.gm_names[group.gm_names.size()] << "\n"
+        oss << group.gm_names[group.gm_names.size() - 1] << "\n"
             << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
             << group.result.rounds << "\n"
-            << group.result.gameState << "\n";
+            << endl;
+
+        printSatellite(oss, *group.result.gameState, mapData_.cols, mapData_.rows);
     }
+
+
 
     return oss.str();
 }
+
 
 
 // void ComparativeSimulator::runSingleGame(const path& gmPath) {
