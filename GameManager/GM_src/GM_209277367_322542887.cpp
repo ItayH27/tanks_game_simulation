@@ -10,7 +10,22 @@ REGISTER_GAME_MANAGER(GM_209277367_322542887);
 
 GM_209277367_322542887::GM_209277367_322542887(bool verbose) : verbose_(verbose) {}
 
-// Function to get actions for both tanks
+/**
+ * @brief Retrieves and stores the next actions for all tanks in the game.
+ *
+ * This method clears the current list of tank actions and then iterates over all tanks.
+ * If a tank is alive, it requests the next action from the tank's algorithm.
+ * Otherwise, it records a "DoNothing" action for that tank.
+ *
+ * @note The second value in the stored pair indicates whether the action is valid (true) or a placeholder (false).
+ *
+ * @details
+ * - Alive tanks have their action fetched via `getTank()->getAction()`.
+ * - Dead tanks are assigned `ActionRequest::DoNothing`.
+ *
+ * @param None
+ * @return void
+ */
 void GM_209277367_322542887::getTankActions() {
     tankActions_.clear();
 
@@ -24,7 +39,21 @@ void GM_209277367_322542887::getTankActions() {
     }
 }
 
-// Function to check if an action is valid
+/**
+ * @brief Checks if a given action is valid for the specified tank.
+ *
+ * Determines if the requested action can be performed by the tank,
+ * validating movement and shooting actions against the current game state.
+ *
+ * @param tank Reference to the TankInfo object representing the tank.
+ * @param action The requested action to validate.
+ * @return true if the action is allowed, false otherwise.
+ *
+ * @note
+ * - Movement actions are validated via isValidMove().
+ * - Shooting actions are validated via isValidShoot().
+ * - All other actions are considered valid by default.
+ */
 bool GM_209277367_322542887::isValidAction(const TankInfo& tank, const ActionRequest action) const {
     switch(action) { // Check if the action is valid based on the tank's requested actions
         case ActionRequest::MoveForward:
@@ -37,7 +66,16 @@ bool GM_209277367_322542887::isValidAction(const TankInfo& tank, const ActionReq
     }
 }
 
-// Function to check if a move is valid
+/**
+ * @brief Validates if the tank can move in the requested direction.
+ *
+ * Checks the next cell based on the tank's position and direction,
+ * ensuring it is not blocked by walls or obstacles.
+ *
+ * @param tank Tank to validate movement for.
+ * @param action Requested move action.
+ * @return true if movement is allowed, false otherwise.
+ */
 bool GM_209277367_322542887::isValidMove(const TankInfo& tank, const ActionRequest action) const {
     // Get the current location of the tank
     auto [fst, snd] = tank.getLocation();
@@ -58,13 +96,31 @@ bool GM_209277367_322542887::isValidMove(const TankInfo& tank, const ActionReque
     return next_cell != '#' && next_cell != '$'; // Return true if the next cell is not a wall
 }
 
-// Function to check if shooting is valid
+/**
+ * @brief Checks if the tank can shoot.
+ *
+ * Valid if it has ammo and no shooting cooldown.
+ *
+ * @param tank Tank to check.
+ * @return true if shooting is allowed, false otherwise.
+ */
 bool GM_209277367_322542887::isValidShoot(const TankInfo& tank) {
     // Check if the tank has ammo and zeroed cooldown
     return tank.getAmmo() > 0 && tank.getTurnsToShoot() == 0;
 }
 
-// Function to perform shoot action
+/**
+ * @brief Performs a shooting action for the given tank.
+ *
+ * Checks if the tank can shoot (has ammo and no cooldown).
+ * If not, only decreases the cooldown.
+ * Otherwise:
+ * - Resets cooldown and decreases ammo.
+ * - Determines the next cell in the firing direction.
+ * - Updates the board and shell list based on what is hit (wall, tank, shell, mine, or empty space).
+ *
+ * @param tank Tank executing the shot.
+ */
 void GM_209277367_322542887::shoot(TankInfo& tank) {
     if (!isValidShoot(tank)) { // Check if the shoot action is valid
         tank.decreaseTurnsToShoot();
@@ -117,6 +173,17 @@ void GM_209277367_322542887::shoot(TankInfo& tank) {
     }
 }
 
+/**
+ * @brief Moves a tank one cell according to the requested action.
+ *
+ * Clears the tank’s current board cell, interprets backward movement
+ * by reversing direction, computes the next location, and delegates
+ * resolution (collisions, board updates, state changes) to
+ * handleTankCollisionAt().
+ *
+ * @param tank Tank to move.
+ * @param action Movement action (forward or backward).
+ */
 void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
     auto [x, y] = tank.getLocation();
     Direction dir = tank.getDirection();
@@ -133,6 +200,25 @@ void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action
     handleTankCollisionAt(tank, x, y, new_x, new_y, dir, next_cell);
 }
 
+/**
+ * @brief Resolves the result of moving a tank into a target cell.
+ *
+ * Applies movement/collision effects based on the content of @p next_cell:
+ * - ' ' (empty): moves the tank, updates its location, and writes its id to the board.
+ * - '@' (mine): marks the moving tank as destroyed and clears the cell.
+ * - '*' (shell): if the shell comes from the opposite direction, destroys the tank and removes the shell;
+ *   otherwise the tank advances onto the cell (marked as 'a'/'b').
+ * - default (another tank): destroys the moving tank, and also destroys the other tank if present.
+ * In all destructive outcomes the target cell is cleared.
+ *
+ * @param tank      The tank being moved/collided.
+ * @param old_x     Previous x-coordinate of the tank.
+ * @param old_y     Previous y-coordinate of the tank.
+ * @param new_x     Target x-coordinate to enter.
+ * @param new_y     Target y-coordinate to enter.
+ * @param dir       Movement direction of the tank.
+ * @param next_cell Board symbol at (new_x, new_y) before resolving the move.
+ */
 void GM_209277367_322542887::handleTankCollisionAt(
     TankInfo& tank, int old_x, int old_y,
     int new_x, int new_y, Direction dir, char next_cell) {
@@ -187,7 +273,16 @@ void GM_209277367_322542887::handleTankCollisionAt(
 }
 
 
-// Function to rotate tank
+/**
+ * @brief Rotates a tank according to the given action.
+ *
+ * Determines the new direction based on rotation type
+ * (left/right 45° or 90°) and updates the tank's orientation.
+ * If the action is not a rotation, the direction remains unchanged.
+ *
+ * @param tank Tank to rotate.
+ * @param action Rotation action request.
+ */
 void GM_209277367_322542887::rotate(TankInfo& tank, const ActionRequest action) {
     // Get the current direction of the tank
     Direction dir = tank.getDirection();
@@ -214,7 +309,23 @@ void GM_209277367_322542887::rotate(TankInfo& tank, const ActionRequest action) 
     tank.setDirection(new_dir); // Update tanks direction
 }
 
-// Function to perform actions for both tanks
+/**
+ * @brief Executes a requested action for the given tank.
+ *
+ * Handles movement, shooting, rotation, and special rules for moving backwards.
+ * Includes timing and flag management for backward movement delays, cooldowns,
+ * and invalid action handling. Also supports retrieving battle info for the tank.
+ *
+ * @param action The action to perform.
+ * @param tank   Reference to the tank performing the action.
+ * @return true if the action was successfully executed or valid, false otherwise.
+ *
+ * @note
+ * - Backward movement may require a delay before execution.
+ * - Invalid actions still reduce the shooting cooldown.
+ * - GetBattleInfo temporarily modifies the gameboard to mark the tank’s position
+ *   before restoring it.
+ */
 bool GM_209277367_322542887::performAction(const ActionRequest action, TankInfo& tank) {
     // Deal with moving backwards
     if (tank.justMovedBackwards() && action == ActionRequest::MoveBackward){ // If the tank just moved backwards
@@ -305,7 +416,18 @@ bool GM_209277367_322542887::performAction(const ActionRequest action, TankInfo&
     return true;
 }
 
-// Function to perform all tank actions
+/**
+ * @brief Executes the queued actions for all alive tanks.
+ *
+ * Iterates over @c tanks_, and for each alive tank calls @c performAction
+ * with the corresponding entry in @c tankActions_. If execution fails,
+ * marks the action’s validity flag (second of the pair) as false.
+ *
+ * @note Expects @c tankActions_ to be aligned with @c tanks_ and
+ *       pre-populated (e.g., by @c getTankActions()).
+ *
+ * @return void
+ */
 void GM_209277367_322542887::performTankActions() {
     // Iterate through all tanks
     for (size_t i = 0; i < tanks_.size(); ++i) {
@@ -320,7 +442,21 @@ void GM_209277367_322542887::performTankActions() {
     }
 }
 
-// Function to check if tanks are out of ammo and check for tanks alive
+/**
+ * @brief Checks the current status of all tanks and updates game state flags.
+ *
+ * Counts remaining alive tanks, checks for ammo depletion, and determines
+ * if the game is over due to no tanks left or one player losing all tanks.
+ * Updates flags such as @c noAmmoFlag_, @c gameOver_, and @c gameOverStatus_,
+ * as well as player tank counts for logging.
+ *
+ * @note
+ * - @c gameOverStatus_ values:
+ *   - 1: Player 1 lost all tanks
+ *   - 2: Player 2 lost all tanks
+ *   - 3: No tanks left for either player
+ * - @c noAmmoFlag_ is set if all remaining tanks have zero ammo.
+ */
 void GM_209277367_322542887::checkTanksStatus() {
     const size_t tank_count = tanks_.size() - destroyedTanksIndices_.size();
     size_t no_ammo_count = 0;
@@ -361,7 +497,15 @@ void GM_209277367_322542887::checkTanksStatus() {
 }
 
 
-// Function to get tank index at a specific location
+/**
+ * @brief Finds the index of a tank located at the given coordinates.
+ *
+ * Iterates through @c tanks_ to match the given (x, y) position with a tank's location.
+ *
+ * @param x X-coordinate to search.
+ * @param y Y-coordinate to search.
+ * @return Tank index if found, -1 if no tank is at the given location.
+ */
 int GM_209277367_322542887::getTankIndexAt(int x, int y) const {
     const pair<int, int> tank_loc = make_pair(x, y);
 
@@ -373,7 +517,15 @@ int GM_209277367_322542887::getTankIndexAt(int x, int y) const {
     return -1; // Tank not found
 }
 
-// Function to get shell at a specific location (by itertator)
+/**
+ * @brief Retrieves an iterator to the shell at the specified coordinates.
+ *
+ * Searches through @c shells_ for a shell whose location matches (x, y).
+ *
+ * @param x X-coordinate to search.
+ * @param y Y-coordinate to search.
+ * @return Iterator to the matching shell, or @c shells_.end() if not found.
+ */
 ShellIterator GM_209277367_322542887::getShellAt(const int x, const int y) {
     for (auto it = shells_.begin(); it != shells_.end(); ++it) { // Check if shell is at location
         if (auto [fst, snd] = (*it)->getLocation(); fst == x && snd == y) {
@@ -384,7 +536,14 @@ ShellIterator GM_209277367_322542887::getShellAt(const int x, const int y) {
     return shells_.end(); // Return end iterator if no shell found
 }
 
-// Function to delete shell given an iterator
+/**
+ * @brief Removes a shell from the game.
+ *
+ * Erases the shell at the given iterator position in @c shells_.
+ *
+ * @param it Iterator pointing to the shell to remove.
+ * @return Iterator to the next element after the erased shell.
+ */
 ShellIterator GM_209277367_322542887::deleteShell(ShellIterator it) {
     if (it != shells_.end()) {
         it = shells_.erase(it); // Remove the shell from the vector
@@ -393,6 +552,20 @@ ShellIterator GM_209277367_322542887::deleteShell(ShellIterator it) {
     return it;
 }
 
+/**
+ * @brief Updates the position of all shells and resolves interactions.
+ *
+ * Iterates over the provided list of shells, moving each one based on its
+ * direction and handling collisions or interactions with tanks, other shells,
+ * and various map objects.
+ *
+ * @param shells Reference to the vector of active shells.
+ *
+ * @note
+ * - Calls helper functions to handle spawning on a tank, clearing the previous position,
+ *   resolving collisions with other shells, or moving into the next cell.
+ * - May remove shells from the list during iteration.
+ */
 void GM_209277367_322542887::moveShells(std::vector<std::unique_ptr<Shell>>& shells) {
     for (auto it = shells.begin(); it != shells.end();) {
         Shell& shell = **it;
@@ -413,6 +586,17 @@ void GM_209277367_322542887::moveShells(std::vector<std::unique_ptr<Shell>>& she
     }
 }
 
+/**
+ * @brief Restores the gameboard cell previously occupied by a shell.
+ *
+ * Updates the cell at the shell’s current location based on what was underneath:
+ * - If above a mine, restores '@' and clears the above-mine flag.
+ * - If part of a stacked shell ('^'), reverts to '*'.
+ * - If overlapping a damaged tank ('a' or 'b'), restores the original tank ('1' or '2').
+ * - Otherwise, clears the cell to an empty space unless it holds a tank or mine.
+ *
+ * @param shell Reference to the shell whose previous position is being cleared.
+ */
 void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell) {
     auto [x, y] = shell.getLocation();
 
@@ -428,6 +612,16 @@ void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell) {
     }
 }
 
+/**
+ * @brief Handles the case where a shell is spawned directly on a tank.
+ *
+ * Checks if the shell's current position corresponds to a destroyed tank marker ('c' or 'd').
+ * If so, marks the tank as destroyed, updates its state, clears the board cell, and removes the shell.
+ *
+ * @param shell Reference to the shell being processed.
+ * @param it Iterator pointing to the shell in @c shells_.
+ * @return true if a shell-tank spawn collision was handled and the shell removed, false otherwise.
+ */
 bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator& it) {
     auto [x, y] = shell.getLocation();
     char cell = gameboard_[y][x];
@@ -444,6 +638,20 @@ bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator&
     return false;
 }
 
+/**
+ * @brief Resolves a shell–shell collision at (x, y).
+ *
+ * If the two shells move in opposite directions, removes both shells
+ * and clears the board cell. Otherwise, stacks the shells at (x, y)
+ * by marking '^' and advances the iterator.
+ *
+ * @param shell The active shell being advanced.
+ * @param x     Target x-coordinate.
+ * @param y     Target y-coordinate.
+ * @param dir   Direction of the active shell.
+ * @param it    Iterator to the active shell; updated if erased.
+ * @return true if @c shells_ becomes empty after handling the collision, false otherwise.
+ */
 bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it) {
     ShellIterator other_shell_it = getShellAt(x, y);
     Direction other_dir = (*other_shell_it)->getDirection();
@@ -472,6 +680,23 @@ bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Di
     }
 }
 
+/**
+ * @brief Moves a shell into the next cell and applies effects.
+ *
+ * Updates the board and shell list based on the target cell:
+ * - '#': weaken wall to '$' and remove the shell.
+ * - '$': destroy wall (set to space) and remove the shell.
+ * - '1'/'2': destroy the tank at (x, y), clear the cell, and remove the shell.
+ * - '@': place shell above a mine (mark '*', set above-mine flag), advance iterator.
+ * - ' ': move shell to (x, y) and mark '*'.
+ * - default: no special handling; advance iterator.
+ *
+ * @param shell   The shell being advanced.
+ * @param x       Target x-coordinate.
+ * @param y       Target y-coordinate.
+ * @param next_cell Board symbol at (x, y).
+ * @param it      Iterator to the shell; may be updated if erased.
+ */
 void GM_209277367_322542887::handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it) {
     switch (next_cell) {
         case '#':
@@ -510,8 +735,15 @@ void GM_209277367_322542887::handleShellMoveToNextCell(Shell& shell, int x, int 
     }
 }
 
-
-// Function to check for shell collisions
+/**
+ * @brief Collapses shells that occupy the same cell and updates the board.
+ *
+ * Groups shells by their (x,y) location. If only one shell exists at a cell,
+ * it is kept; if multiple shells share a cell, they are all removed and the
+ * board cell is cleared to space.
+ *
+ * @note Rebuilds @c shells_ from the grouped map, removing collided shells.
+ */
 void GM_209277367_322542887::checkShellsCollide() {
     map<pair<int, int>, vector<unique_ptr<Shell>>> shell_map;
 
@@ -534,6 +766,20 @@ void GM_209277367_322542887::checkShellsCollide() {
     }
 }
 
+/**
+ * @brief Initializes the game board and spawns tanks from a satellite snapshot.
+ *
+ * Copies all cells from @p gameBoard into @c gameboard_, creates tank
+ * algorithms/infos for any '1'/'2' cells (using the respective factories),
+ * and records their initial locations and ammo. If either side has zero tanks,
+ * marks the game as over and writes a brief result to the verbose log.
+ *
+ * @param gameBoard Immutable snapshot providing map objects via getObjectAt().
+ * @return true on successful initialization.
+ *
+ * @note Cell semantics: '1'/'2' = player tanks; other symbols are copied verbatim.
+ *       Tank coordinates are stored as (x=j, y=i).
+ */
 bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard) {
     int tank_1_count = 0, tank_2_count = 0;
     gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
@@ -573,7 +819,36 @@ bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard) {
     return true;
 }
 
-// Function to run the game
+/**
+ * @brief Runs a single Tank Game from initialization to termination.
+ *
+ * Initializes game dimensions, limits, players, and algorithm factories,
+ * builds the initial board via initiateGame(), then executes the main loop
+ * until a terminal condition is reached (max steps, all tanks dead, or
+ * prolonged zero-ammo state).
+ *
+ * Per turn:
+ * - Snapshots @c gameboard_ to @c lastRoundGameboard_.
+ * - Collects actions (getTankActions) and executes them (performTankActions).
+ * - Advances shells and resolves collisions (moveShells, checkShellsCollide).
+ * - Logs the state (updateGameLog) and updates win/termination flags
+ *   (checkTanksStatus, no-ammo timer handling).
+ * - Finalizes the result with updateGameResult() when the game ends.
+ *
+ * @param map_width  Board width.
+ * @param map_height Board height.
+ * @param map        Read-only map snapshot used to initialize the game.
+ * @param map_name   Map identifier (not used internally here).
+ * @param max_steps  Maximum number of rounds to simulate.
+ * @param num_shells Initial shells per tank.
+ * @param player1    Player interface for player 1.
+ * @param name1      Player 1 display name (not used internally here).
+ * @param player2    Player interface for player 2.
+ * @param name2      Player 2 display name (not used internally here).
+ * @param player1_tank_algo_factory Factory for player 1 tank algorithms.
+ * @param player2_tank_algo_factory Factory for player 2 tank algorithms.
+ * @return Final @c GameResult moved out of @c gameResult_.
+ */
 GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
         size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
         TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory) {
@@ -644,10 +919,22 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
         ++turn_; // Increment the turn counter
     }
 
-    return move(gameResult_);
+    return std::move(gameResult_);
 }
 
-// Function to calc next location
+/**
+ * @brief Calculates the next board coordinates from a starting point and direction.
+ *
+ * Uses the @c directionMap to translate a @p dir into (dx, dy) offsets.
+ * If @p backwards is true, reverses the direction. Wraps around the board
+ * edges using modulo width/height to ensure valid coordinates.
+ *
+ * @param x         Current x-coordinate.
+ * @param y         Current y-coordinate.
+ * @param dir       Movement direction.
+ * @param backwards Whether to move in the opposite direction.
+ * @return Pair of (new_x, new_y) coordinates.
+ */
 pair<int, int> GM_209277367_322542887::nextLocation(const int x, const int y, const Direction dir, const bool backwards) const {
     auto [dx, dy] = directionMap.at(dir);
     if (backwards) { // If the direction is backwards, reverse the direction
@@ -657,12 +944,24 @@ pair<int, int> GM_209277367_322542887::nextLocation(const int x, const int y, co
     return {(x + dx + width_) % width_, (y + dy + height_) % height_}; // Calculate the next location
 }
 
+/**
+ * @brief Updates the stored final game result.
+ *
+ * Sets the winner, reason, remaining tanks per player, final game state,
+ * and total number of rounds in @c gameResult_.
+ *
+ * @param winner          ID of the winning player (0 for tie).
+ * @param reason          Integer castable to @c GameResult::Reason.
+ * @param remaining_tanks Vector of remaining tanks per player.
+ * @param game_state      Final game board state as a SatelliteView.
+ * @param rounds          Total rounds played.
+ */
 void GM_209277367_322542887::updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
     unique_ptr<SatelliteView> game_state, size_t rounds) {
     gameResult_.winner = winner;
     gameResult_.reason = static_cast<GameResult::Reason>(reason);
     gameResult_.remaining_tanks = remaining_tanks;
-    gameResult_.gameState = move(game_state);
+    gameResult_.gameState = std::move(game_state);
     gameResult_.rounds = rounds;
 }
 
@@ -734,6 +1033,17 @@ pair<int, int> GM_209277367_322542887::getGameboardSize() const {
     return {width_, height_};
 }
 
+/**
+ * @brief Writes the current turn’s tank actions and statuses to the game log.
+ *
+ * For each tank:
+ * - If alive, logs its chosen action (marking "(ignored)" if invalid).
+ * - If just killed this turn, logs action with "(killed)" and increments its dead-turn counter.
+ * - If already dead, logs "killed".
+ *
+ * Entries are separated by spaces and commas, one turn per log line.
+ * Logging occurs only if @c verbose_ is true.
+ */
 void GM_209277367_322542887::updateGameLog() {
     for (int i = 0; i < static_cast<int>(tanks_.size()); ++i) {
         if (i != 0) { if (verbose_) gameLog_ << " "; }
