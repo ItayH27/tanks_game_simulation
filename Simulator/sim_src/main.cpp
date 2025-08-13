@@ -1,6 +1,7 @@
 #include <iostream>
 #include "../sim_include/cmd_parser.h"
 #include "../sim_include/competitive_simulator.h"
+#include "../sim_include/comparative_simulator.h"
 
 int main(int argc, char** argv) {
     CmdParser::ParseResult result = CmdParser::parse(argc, argv);
@@ -13,7 +14,8 @@ int main(int argc, char** argv) {
 
     try {
         if (result.mode == CmdParser::Mode::Comparative) {
-            runComparative(
+            ComparativeSimulator comparativeSimulator(result.verbose, (result.numThreads.value()));
+            comparativeSimulator.run(
                 result.gameMapFile,
                 result.gameManagersFolder,
                 result.algorithm1File,

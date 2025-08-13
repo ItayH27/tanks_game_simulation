@@ -260,7 +260,7 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
     }
 }
 
-void ComparativeSimulator::WriteOutput(const string& mapPath,
+void ComparativeSimulator::writeOutput(const string& mapPath,
                      const string& algorithmSoPath1,
                      const string& algorithmSoPath2,
                      const string& gmFolder) {

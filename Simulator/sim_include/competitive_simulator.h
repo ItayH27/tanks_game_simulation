@@ -6,52 +6,56 @@
 #include <memory>
 #include <filesystem>
 #include <mutex>
+#include <thread>
 #include "AlgorithmRegistrar.h"
 #include "GameManagerRegistration.h"
-#include "AbstractGameManager.h"
 #include "Simulator.h"
 
-class CompetitiveSimulator : Simulator {
+using std::string, std::vector, std::unordered_map, std::mutex, std::shared_ptr, std::lock_guard, std::pair,
+    std::unique_ptr, std::ofstream, std::ifstream, std::sort, std::cout, std::endl, std::exception, std::make_shared,
+    std::min, std::thread;
+namespace fs = fs;
+
+class CompetitiveSimulator : public Simulator {
+#ifdef UNIT_TEST
+    friend class TestSimulator;
+    friend class TestSimulatorWithFakeDlopen;
+#endif
 public:
     CompetitiveSimulator(bool verbose, size_t numThreads);
     ~CompetitiveSimulator();
 
-    int run(const std::string& mapsFolder,
-            const std::string& gameManagerSoPath,
-            const std::string& algorithmsFolder);
+    int run(const string& mapsFolder,
+            const string& gameManagerSoPath,
+            const string& algorithmsFolder);
 
 private:
     struct GameTask {
-        std::filesystem::path mapPath;
-        std::string algoName1;
-        std::string algoName2;
+        fs::path mapPath;
+        string algoName1;
+        string algoName2;
     };
 
-    bool verbose_;
-    size_t numThreads_;
-    void* gameManagerHandle_ = nullptr;
-    GameManagerFactory gameManagerFactory_;
+    vector<shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>> algorithms_;
+    vector<GameTask> scheduledGames_;
+    unordered_map<string, int> scores_;
+    mutex scoresMutex_; // protect score updates
+    unordered_map<string, void*> algoPathToHandle_;
+    unordered_map<string, string> algoNameToPath_;
+    unordered_map<string, int> algoUsageCounts_;
+    mutex handlesMutex_;
 
-    std::vector<std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>> algorithms_;
-    std::vector<GameTask> scheduledGames_;
-    std::unordered_map<std::string, int> scores_;
-    std::mutex scoresMutex_; // protect score updates
-    std::unordered_map<std::string, void*> algoPathToHandle_;
-    std::unordered_map<std::string, std::string> algoNameToPath_;
-    std::unordered_map<std::string, int> algoUsageCounts_;
-    std::mutex handlesMutex_;
-
-    bool loadGameManager(const std::string& soPath);
-    bool getAlgorithms(const std::string& folder);
-    bool loadMaps(const std::string& folder, std::vector<std::filesystem::path>& outMaps);
-    void scheduleGames(const std::vector<std::filesystem::path>& maps);
+    bool loadGameManager(const string& soPath);
+    bool getAlgorithms(const string& folder);
+    bool loadMaps(const string& folder, vector<fs::path>& outMaps);
+    void scheduleGames(const vector<fs::path>& maps);
     void runGames();
-    void CompetitiveSimulator::ensureAlgorithmLoaded(const std::string& name);
-    std::shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>
-        CompetitiveSimulator::getValidatedAlgorithm(const std::string& name);
+    void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name);
+    shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories>
+        CompetitiveSimulator::getValidatedAlgorithm(const string& name);
     void runSingleGame(const GameTask& task);
-    void updateScore(const std::string& winnerName, const std::string& loserName, bool tie);
-    void writeOutput(const std::string& outFolder, const std::string& mapFolder, const std::string& gmSoName);
+    void updateScore(const string& winnerName, const string& loserName, bool tie);
+    void writeOutput(const string& outFolder, const string& mapFolder, const string& gmSoName);
     std::unique_ptr<AbstractGameManager> createGameManager();
-    void decreaseUsageCount(const std::string& algoName);
+    void decreaseUsageCount(const string& algoName);
 };

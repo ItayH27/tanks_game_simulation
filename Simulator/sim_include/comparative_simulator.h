@@ -64,7 +64,7 @@ private:
     bool sameResult(const GameResult& a, const GameResult& b) const;
     void makeGroups(vector<pair<GameResult,string>>& results);
 
-    void WriteOutput(const string& mapPath,
+    void writeOutput(const string& mapPath,
                      const string& algorithmSoPath1,
                      const string& algorithmSoPath2,
                      const string& gmFolder);

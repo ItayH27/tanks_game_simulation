@@ -65,11 +65,14 @@ REGISTER_GAME_MANAGER(GM_209277367_322542887);
 // void GM_209277367_322542887::setVisualMode(const bool visual_mode) { this->visualMode_ = visual_mode; }
 
 // Constructor for GameManager class
-GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
-        std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
-    player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
-    turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
-    // visualMode_(false)
+// GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
+//         std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
+//     player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
+//     turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
+//     // visualMode_(false)
+
+GM_209277367_322542887::GM_209277367_322542887(bool verbose) : verbose_(verbose) {}
+
 
 
 // Extract relevant value from a line of text
@@ -327,22 +330,18 @@ void GM_209277367_322542887::shoot(TankInfo& tank) {
             gameboard_[new_y][new_x] = '$'; // Weaken the wall
             // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Shot and weakened wall at (" << new_x << ", " << new_y << ")" << endl;
             break;}
-
         case '$': {// If the next cell is a weak wall
             gameboard_[new_y][new_x] = ' '; // Destroy the wall
             // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Shot and destroyed wall at (" << new_x << ", " << new_y << ")" << endl;
             break;}
-
         case '1': {  // If the next cell is occupied by tank 1
             gameboard_[new_y][new_x] = 'c'; // Update the game board with the new position of the tank
             shells_.emplace_back(make_unique<Shell>(new_x, new_y, dir)); // Add the shell to the list of shells
             break;}
-
         case '2': {// If the next cell is occupied by tank 2
             gameboard_[new_y][new_x] = 'd'; // Update the game board with the new position of the destroyed tank
             shells_.emplace_back(make_unique<Shell>(new_x, new_y, dir)); // Add the shell to the list of shells
             break;}
-
         case '*': { // If the next cell is a shell
             gameboard_[new_y][new_x] = ' '; // Remove both shells from the game board
             if (const auto shell_it = getShellAt(new_x, new_y); shell_it != shells_.end()) { // Find the shell at the new position
@@ -350,14 +349,12 @@ void GM_209277367_322542887::shoot(TankInfo& tank) {
             }
             // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Shot a shell at (" << new_x << ", " << new_y << ")" << endl;
             break; }
-
         case '@': {// If the next cell is a mine
             auto shell_loc = pair(new_x, new_y); // Create a new shell location
             shells_.emplace_back(make_unique<Shell>(shell_loc, dir)); // Add the shell to the list of shells
             gameboard_[new_y][new_x] = '*'; // Mark the shell's position on the game board
             shells_.back()->setAboveMine(true); // Set the shell to be above the mine
             break;}
-
         default: {// If the next cell is empty
             gameboard_[new_y][new_x] = '*'; // Mark the shell's position on the game board
             shells_.emplace_back(make_unique<Shell>(new_x, new_y, dir)); // Add the shell to the list of shells
@@ -366,70 +363,140 @@ void GM_209277367_322542887::shoot(TankInfo& tank) {
 }
 
 // Function to move tank
-void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
-    // Get the current location of the tank
-    auto [fst, snd] = tank.getLocation();
-    const int x = fst;
-    const int y = snd;
-    Direction dir = tank.getDirection(); // Get the direction of the tank
+// void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
+//     // Get the current location of the tank
+//     auto [fst, snd] = tank.getLocation();
+//     const int x = fst;
+//     const int y = snd;
+//     Direction dir = tank.getDirection(); // Get the direction of the tank
+//
+//     gameboard_[y][x] = ' '; // Clear the previous position of the tank
+//     if (action == ActionRequest::MoveBackward) { // If moving backward, Update technical direction
+//         dir = static_cast<Direction>((static_cast<int>(dir) + 4) % NUM_OF_DIRECTIONS);
+//     }
+//
+//     // Calculate the new position based on the direction
+//     auto [new_x, new_y] = nextLocation(x, y, dir);
+//     char next_cell = gameboard_[new_y][new_x];
+//
+//     // Check the next cell for obstacles
+//     if (next_cell == ' ') { // If the next cell is empty
+//         // Update the tank's location and gameboard
+//         gameboard_[new_y][new_x] = static_cast<char>('0' + tank.getPlayerId());
+//         tank.setLocation(new_x, new_y);
+//
+//     } else if (next_cell == '@') {// If the next cell is a mine
+//         // Update the tank's location and gameboard
+//         const int tank_index = getTankIndexAt(x, y);
+//         destroyedTanksIndices_.insert(tank_index); // Mark the tank for deletion
+//         tanks_[tank_index]->increaseTurnsDead();
+//         gameboard_[new_y][new_x] = ' ';
+//
+//         // Log the action
+//         // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Hit a mine at (" << new_x << ", " << new_y << ")" << endl;
+//     }
+//     else if (next_cell == '*') {
+//         const ShellIterator shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
+//         int other_shell_dir = static_cast<int>((*shell_it)->getDirection()); // Get the direction of the other shell
+//
+//         // Destroy tank if opposite of shells movement
+//         if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) {
+//             const int tank_index = getTankIndexAt(x, y);
+//             destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
+//             tanks_[tank_index]->increaseTurnsDead();
+//             deleteShell(shell_it); // Delete the shell
+//             gameboard_[new_y][new_x] = ' ';
+//         }
+//
+//         else {
+//             gameboard_[new_y][new_x] = tank.getPlayerId() == 1 ? 'a' : 'b';
+//             tank.setLocation(new_x, new_y);
+//         }
+//     }
+//
+//     else { // If the next cell is occupied by another tank
+//         int tank_index = getTankIndexAt(x, y);
+//         destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
+//         tanks_[tank_index]->increaseTurnsDead();
+//         tank_index = getTankIndexAt(new_x, new_y);
+//         destroyedTanksIndices_.insert(tank_index); // Mark the other tank for deletion
+//         tanks_[tank_index]->increaseTurnsDead();
+//         gameboard_[new_y][new_x] = ' ';
+//
+//         // Log the action
+//         // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Collided with another tank at (" << new_x << ", " << new_y << ")" << endl;
+//     }
+// }
 
-    gameboard_[y][x] = ' '; // Clear the previous position of the tank
-    if (action == ActionRequest::MoveBackward) { // If moving backward, Update technical direction
+void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
+    auto [x, y] = tank.getLocation();
+    Direction dir = tank.getDirection();
+
+    gameboard_[y][x] = ' ';
+
+    if (action == ActionRequest::MoveBackward) {
         dir = static_cast<Direction>((static_cast<int>(dir) + 4) % NUM_OF_DIRECTIONS);
     }
 
-    // Calculate the new position based on the direction
     auto [new_x, new_y] = nextLocation(x, y, dir);
     char next_cell = gameboard_[new_y][new_x];
 
-    // Check the next cell for obstacles
-    if (next_cell == ' ') { // If the next cell is empty
-        // Update the tank's location and gameboard
-        gameboard_[new_y][new_x] = static_cast<char>('0' + tank.getPlayerId());
-        tank.setLocation(new_x, new_y);
+    handleTankCollisionAt(tank, x, y, new_x, new_y, dir, next_cell);
+}
 
-    } else if (next_cell == '@') {// If the next cell is a mine
-        // Update the tank's location and gameboard
-        const int tank_index = getTankIndexAt(x, y);
-        destroyedTanksIndices_.insert(tank_index); // Mark the tank for deletion
-        tanks_[tank_index]->increaseTurnsDead();
-        gameboard_[new_y][new_x] = ' ';
+void GM_209277367_322542887::handleTankCollisionAt(
+    TankInfo& tank, int old_x, int old_y,
+    int new_x, int new_y, Direction dir, char next_cell) {
 
-        // Log the action
-        // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Hit a mine at (" << new_x << ", " << new_y << ")" << endl;
-    }
-    else if (next_cell == '*') {
-        const ShellIterator shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
-        int other_shell_dir = static_cast<int>((*shell_it)->getDirection()); // Get the direction of the other shell
+    const int player_id = tank.getPlayerId();
 
-        // Destroy tank if opposite of shells movement
-        if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) {
-            const int tank_index = getTankIndexAt(x, y);
-            destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
-            tanks_[tank_index]->increaseTurnsDead();
-            deleteShell(shell_it); // Delete the shell
-            gameboard_[new_y][new_x] = ' ';
-        }
-
-        else {
-            gameboard_[new_y][new_x] = tank.getPlayerId() == 1 ? 'a' : 'b';
+    switch (next_cell) {
+        case ' ': {
+            gameboard_[new_y][new_x] = static_cast<char>('0' + player_id);
             tank.setLocation(new_x, new_y);
+            break;
         }
-    }
+        case '@': {
+            int tank_index = getTankIndexAt(old_x, old_y);
+            destroyedTanksIndices_.insert(tank_index);
+            tanks_[tank_index]->increaseTurnsDead();
+            gameboard_[new_y][new_x] = ' ';
+            break;
+        }
+        case '*': {
+            ShellIterator shell_it = getShellAt(new_x, new_y);
+            int shell_dir = static_cast<int>((*shell_it)->getDirection());
 
-    else { // If the next cell is occupied by another tank
-        int tank_index = getTankIndexAt(x, y);
-        destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
-        tanks_[tank_index]->increaseTurnsDead();
-        tank_index = getTankIndexAt(new_x, new_y);
-        destroyedTanksIndices_.insert(tank_index); // Mark the other tank for deletion
-        tanks_[tank_index]->increaseTurnsDead();
-        gameboard_[new_y][new_x] = ' ';
+            if (static_cast<int>(dir) == ((shell_dir + 4) % NUM_OF_DIRECTIONS)) {
+                int tank_index = getTankIndexAt(old_x, old_y);
+                destroyedTanksIndices_.insert(tank_index);
+                tanks_[tank_index]->increaseTurnsDead();
+                deleteShell(shell_it);
+                gameboard_[new_y][new_x] = ' ';
+            } else {
+                gameboard_[new_y][new_x] = (player_id == 1) ? 'a' : 'b';
+                tank.setLocation(new_x, new_y);
+            }
+            break;
+        }
+        default: { // Assume another tank
+            int self_idx = getTankIndexAt(old_x, old_y);
+            int other_idx = getTankIndexAt(new_x, new_y);
 
-        // Log the action
-        // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Collided with another tank at (" << new_x << ", " << new_y << ")" << endl;
+            destroyedTanksIndices_.insert(self_idx);
+            tanks_[self_idx]->increaseTurnsDead();
+
+            if (other_idx != -1) {
+                destroyedTanksIndices_.insert(other_idx);
+                tanks_[other_idx]->increaseTurnsDead();
+            }
+
+            gameboard_[new_y][new_x] = ' ';
+            break;
+        }
     }
 }
+
 
 // Function to rotate tank
 void GM_209277367_322542887::rotate(TankInfo& tank, const ActionRequest action) {
@@ -594,7 +661,6 @@ void GM_209277367_322542887::checkTanksStatus() {
         gameOverStatus_ = 1;
         gameOver_ = true;
     }
-
     else if (player_2_count == 0) { // If player 2 is out of tanks
         gameOverStatus_ = 2;
         gameOver_ = true;
@@ -639,121 +705,239 @@ ShellIterator GM_209277367_322542887::deleteShell(ShellIterator it) {
 }
 
 // Function to move shells
-void GM_209277367_322542887::moveShells(vector<unique_ptr<Shell>>& shells) {
-    for (auto it = shells.begin(); it != shells.end();) { // Iterate through all shells
-        Shell& shell = **it; // De-reference the iterator to get the shell
-        auto [fst, snd] = shell.getLocation();
-        const int x = fst;
-        const int y = snd;
-        Direction dir = shell.getDirection();
+// void GM_209277367_322542887::moveShells(vector<unique_ptr<Shell>>& shells) {
+//     for (auto it = shells.begin(); it != shells.end();) { // Iterate through all shells
+//         Shell& shell = **it; // De-reference the iterator to get the shell
+//         auto [fst, snd] = shell.getLocation();
+//         const int x = fst;
+//         const int y = snd;
+//         Direction dir = shell.getDirection();
+//
+//         // Calculate the next location of the shell
+//         auto [new_x, new_y] = nextLocation(x, y, dir);
+//         const char next_cell = gameboard_[new_y][new_x];
+//
+//         // Shells spawned exactly on tanks
+//         if (gameboard_[y][x] == 'c' || gameboard_[y][x] == 'd') {
+//             if (const int tank_index = getTankIndexAt(x, y); tank_index != -1) {
+//                 destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
+//                 tanks_[tank_index]->increaseTurnsDead();
+//                 gameboard_[y][x] = ' '; // Remove the tank from the gameboard
+//
+//                 // cout << "Shell hit and destroyed players 1's tank  at: " << x << ", " << y << endl; // Log the shell collision
+//                 it = shells.erase(it); // Remove the shell from the vector
+//                 break;
+//             }
+//         }
+//
+//         // Unique cases of shell movement
+//         if (shell.isAboveMine()) { gameboard_[y][x] = '@'; shell.setAboveMine(false); } // Mark the shell's position on the gameboard
+//         if (gameboard_[y][x] == '^') { gameboard_[y][x] = '*'; } // Clear the previous position of the shell
+//         if (gameboard_[y][x] == 'a' || gameboard_[y][x] == 'b') { gameboard_[y][x] = gameboard_[y][x] == 'a' ? '1': '2'; } // Clear the previous position of the shell
+//         if (!(gameboard_[y][x] == '1' || gameboard_[y][x] == '2' || gameboard_[y][x] == '@')){ gameboard_[y][x] = ' '; } // Clear the previous position of the shell
+//
+//         // Check if the next cell is a wall, weakened wall, or tank
+//         switch(next_cell){
+//             case '#': // If next cell is a wall
+//                 gameboard_[new_y][new_x] = '$'; // Damage the wall
+//                 // cout << "Shell hit and weakened wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
+//                 it = shells.erase(it); // Remove the shell from the vector
+//                 break;
+//
+//             case '$': // If next cell is a weakened wall
+//                 gameboard_[new_y][new_x] = ' '; // Destroy the wall
+//                 // cout << "Shell hit and destroyed wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
+//                 it = shells.erase(it); // Remove the shell from the vector
+//                 break;
+//
+//             case '1': {// If next cell is occupied by tank 1
+//                 if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) { //
+//                     //delete_tank(tank_it); // Delete tank 1
+//                     destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
+//                     tanks_[tank_index]->increaseTurnsDead();
+//                     gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
+//
+//                     // cout << "Shell hit and destroyed players 1's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
+//                     it = shells.erase(it); // Remove the shell from the vector
+//                 }
+//                 break;}
+//
+//             case '2':{
+//                 if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) {
+//                     gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
+//                     destroyedTanksIndices_.insert(tank_index); // Mark tank 2 for deletion
+//                     tanks_[tank_index]->increaseTurnsDead();
+//                     // cout << "Shell hit and destroyed players 2's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
+//                     it = shells.erase(it); // Remove the shell from the vector
+//                 }
+//                 break;}
+//
+//             case '@': // If next cell is a mine
+//                 shell.setLocation(new_x, new_y); // Update the shell's location
+//                 gameboard_[new_y][new_x] = '*'; // Mark intersection of shell and mine
+//                 shell.setAboveMine(true); // Set the shell to be above the mine
+//                 ++it; // Move to the next shell
+//                 break;
+//
+//             case '*': {// If next cell is a shell
+//                 // cout << "Shells collided at: " << new_x << ", " << new_y << endl; // Log the shell collision
+//
+//                 ShellIterator other_shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
+//                 const int other_shell_dir = static_cast<int>((*other_shell_it)->getDirection());
+//                 if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) { // If the shells are in opposite directions
+//                     gameboard_[new_y][new_x] = ' '; // Mark the shell's position on the game board
+//
+//                     if (it < other_shell_it) { // If current shell is before the other shell
+//                         deleteShell(other_shell_it); // Delete the other shell
+//
+//                         it = shells.erase(it); // Remove the shell from the vector
+//                     }
+//                     else {
+//                         shells.erase(it); // Remove the shell from the vector
+//
+//                         it = deleteShell(other_shell_it); // Delete the other shell
+//                     }
+//
+//                     if (shells.empty()) { // If there are no more shells
+//                         goto last_elem; // If the iterator reaches the end, break out of the loop
+//                     }
+//                 }
+//                 else { // If the shells are not in opposite directions
+//                     (*it)->setLocation(new_x, new_y); // Update the shell's location
+//                     gameboard_[new_y][new_x] = '^'; // Mark the new position of the shell on the game board
+//                     ++it; // Move to the next shell if no deletion occurs
+//                 }
+//                 break;}
+//
+//             case ' ': // If next cell is empty
+//                 shell.setLocation(new_x, new_y); // Update the shell's location
+//                 gameboard_[new_y][new_x] = '*'; // Mark the new position of the shell on the gameboard
+//                 ++it; // Move to the next shell
+//                 break;
+//             default: ;
+//         }
+//     }
+// last_elem:
+//     return;
+// }
 
-        // Calculate the next location of the shell
+void GM_209277367_322542887::moveShells(std::vector<std::unique_ptr<Shell>>& shells) {
+    for (auto it = shells.begin(); it != shells.end();) {
+        Shell& shell = **it;
+        auto [x, y] = shell.getLocation();
+        Direction dir = shell.getDirection();
         auto [new_x, new_y] = nextLocation(x, y, dir);
         const char next_cell = gameboard_[new_y][new_x];
 
-        // Shells spawned exactly on tanks
-        if (gameboard_[y][x] == 'c' || gameboard_[y][x] == 'd') {
-            if (const int tank_index = getTankIndexAt(x, y); tank_index != -1) {
-                destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
-                tanks_[tank_index]->increaseTurnsDead();
-                gameboard_[y][x] = ' '; // Remove the tank from the gameboard
+        if (handleShellSpawnOnTank(shell, it)) continue;
 
-                // cout << "Shell hit and destroyed players 1's tank  at: " << x << ", " << y << endl; // Log the shell collision
-                it = shells.erase(it); // Remove the shell from the vector
-                break;
-            }
-        }
+        clearPreviousShellPosition(shell);
 
-        // Unique cases of shell movement
-        if (shell.isAboveMine()) { gameboard_[y][x] = '@'; shell.setAboveMine(false); } // Mark the shell's position on the gameboard
-        if (gameboard_[y][x] == '^') { gameboard_[y][x] = '*'; } // Clear the previous position of the shell
-        if (gameboard_[y][x] == 'a' || gameboard_[y][x] == 'b') { gameboard_[y][x] = gameboard_[y][x] == 'a' ? '1': '2'; } // Clear the previous position of the shell
-        if (!(gameboard_[y][x] == '1' || gameboard_[y][x] == '2' || gameboard_[y][x] == '@')){ gameboard_[y][x] = ' '; } // Clear the previous position of the shell
-
-        // Check if the next cell is a wall, weakened wall, or tank
-        switch(next_cell){
-            case '#': // If next cell is a wall
-                gameboard_[new_y][new_x] = '$'; // Damage the wall
-                // cout << "Shell hit and weakened wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
-                it = shells.erase(it); // Remove the shell from the vector
-                break;
-
-            case '$': // If next cell is a weakened wall
-                gameboard_[new_y][new_x] = ' '; // Destroy the wall
-                // cout << "Shell hit and destroyed wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
-                it = shells.erase(it); // Remove the shell from the vector
-                break;
-
-            case '1': {// If next cell is occupied by tank 1
-                if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) { //
-                    //delete_tank(tank_it); // Delete tank 1
-                    destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
-                    tanks_[tank_index]->increaseTurnsDead();
-                    gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
-
-                    // cout << "Shell hit and destroyed players 1's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
-                    it = shells.erase(it); // Remove the shell from the vector
-                }
-                break;}
-
-            case '2':{
-                if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) {
-                    gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
-                    destroyedTanksIndices_.insert(tank_index); // Mark tank 2 for deletion
-                    tanks_[tank_index]->increaseTurnsDead();
-                    // cout << "Shell hit and destroyed players 2's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
-                    it = shells.erase(it); // Remove the shell from the vector
-                }
-                break;}
-
-            case '@': // If next cell is a mine
-                shell.setLocation(new_x, new_y); // Update the shell's location
-                gameboard_[new_y][new_x] = '*'; // Mark intersection of shell and mine
-                shell.setAboveMine(true); // Set the shell to be above the mine
-                ++it; // Move to the next shell
-                break;
-
-            case '*': {// If next cell is a shell
-                // cout << "Shells collided at: " << new_x << ", " << new_y << endl; // Log the shell collision
-
-                ShellIterator other_shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
-                const int other_shell_dir = static_cast<int>((*other_shell_it)->getDirection());
-                if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) { // If the shells are in opposite directions
-                    gameboard_[new_y][new_x] = ' '; // Mark the shell's position on the game board
-
-                    if (it < other_shell_it) { // If current shell is before the other shell
-                        deleteShell(other_shell_it); // Delete the other shell
-
-                        it = shells.erase(it); // Remove the shell from the vector
-                    }
-                    else {
-                        shells.erase(it); // Remove the shell from the vector
-
-                        it = deleteShell(other_shell_it); // Delete the other shell
-                    }
-
-                    if (shells.empty()) { // If there are no more shells
-                        goto last_elem; // If the iterator reaches the end, break out of the loop
-                    }
-                }
-                else { // If the shells are not in opposite directions
-                    (*it)->setLocation(new_x, new_y); // Update the shell's location
-                    gameboard_[new_y][new_x] = '^'; // Mark the new position of the shell on the game board
-                    ++it; // Move to the next shell if no deletion occurs
-                }
-                break;}
-
-            case ' ': // If next cell is empty
-                shell.setLocation(new_x, new_y); // Update the shell's location
-                gameboard_[new_y][new_x] = '*'; // Mark the new position of the shell on the gameboard
-                ++it; // Move to the next shell
-                break;
-            default: ;
+        if (next_cell == '*') {
+            if (handleShellCollision(shell, new_x, new_y, dir, it)) return;
+        } else {
+            handleShellMoveToNextCell(shell, new_x, new_y, next_cell, it);
         }
     }
-last_elem:
-    return;
 }
+
+void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell) {
+    auto [x, y] = shell.getLocation();
+
+    if (shell.isAboveMine()) {
+        gameboard_[y][x] = '@';
+        shell.setAboveMine(false);
+    } else if (gameboard_[y][x] == '^') {
+        gameboard_[y][x] = '*';
+    } else if (gameboard_[y][x] == 'a' || gameboard_[y][x] == 'b') {
+        gameboard_[y][x] = (gameboard_[y][x] == 'a') ? '1' : '2';
+    } else if (gameboard_[y][x] != '1' && gameboard_[y][x] != '2' && gameboard_[y][x] != '@') {
+        gameboard_[y][x] = ' ';
+    }
+}
+
+bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator& it) {
+    auto [x, y] = shell.getLocation();
+    char cell = gameboard_[y][x];
+    if (cell == 'c' || cell == 'd') {
+        int tank_index = getTankIndexAt(x, y);
+        if (tank_index != -1) {
+            destroyedTanksIndices_.insert(tank_index);
+            tanks_[tank_index]->increaseTurnsDead();
+            gameboard_[y][x] = ' ';
+            it = shells_.erase(it);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it) {
+    ShellIterator other_shell_it = getShellAt(x, y);
+    Direction other_dir = (*other_shell_it)->getDirection();
+
+    auto areOppositeDirections = [](Direction d1, Direction d2) {
+        return static_cast<int>(d1) == (static_cast<int>(d2) + 4) % NUM_OF_DIRECTIONS;
+    };
+
+    if (areOppositeDirections(dir, other_dir)) {
+        gameboard_[y][x] = ' ';
+
+        if (it < other_shell_it) {
+            deleteShell(other_shell_it);
+            it = shells_.erase(it);
+        } else {
+            shells_.erase(it);
+            it = deleteShell(other_shell_it);
+        }
+
+        return shells_.empty();
+    } else {
+        shell.setLocation(x, y);
+        gameboard_[y][x] = '^';
+        ++it;
+        return false;
+    }
+}
+
+void GM_209277367_322542887::handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it) {
+    switch (next_cell) {
+        case '#':
+            gameboard_[y][x] = '$';
+            it = shells_.erase(it);
+            break;
+        case '$':
+            gameboard_[y][x] = ' ';
+            it = shells_.erase(it);
+            break;
+        case '1':
+        case '2': {
+            int tank_index = getTankIndexAt(x, y);
+            if (tank_index != -1) {
+                destroyedTanksIndices_.insert(tank_index);
+                tanks_[tank_index]->increaseTurnsDead();
+                gameboard_[y][x] = ' ';
+                it = shells_.erase(it);
+            }
+            break;
+        }
+        case '@':
+            shell.setLocation(x, y);
+            gameboard_[y][x] = '*';
+            shell.setAboveMine(true);
+            ++it;
+            break;
+        case ' ':
+            shell.setLocation(x, y);
+            gameboard_[y][x] = '*';
+            ++it;
+            break;
+        default:
+            ++it;
+            break;
+    }
+}
+
 
 // Function to check for shell collisions
 void GM_209277367_322542887::checkShellsCollide() {
@@ -778,11 +962,54 @@ void GM_209277367_322542887::checkShellsCollide() {
     }
 }
 
+bool GM_209277367_322542887::initiateGame(unique_ptr<SatelliteView> gameBoard, int width, int height) {
+    int tank_1_count = 0, tank_2_count = 0;
+    gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
+
+    for (int i = 0; i < height_; ++i) {
+        for (int j = 0; j < width_; ++j) {
+            char cell = gameBoard.getObjectAt(i, j);
+            gameboard_[i][j] = cell; // Always update gameboard
+
+            if (cell == '1' || cell == '2') {
+                int player = cell - '0';
+                int& tankCount = (player == 1) ? tank_1_count : tank_2_count;
+                auto& factory = (player == 1) ? player1TankFactory_ : player2TankFactory_;
+
+                auto tank = factory->create(player, tankCount);
+                auto tankInfo = std::make_unique<TankInfo>(tankCount, std::make_pair(j, i), numShells_, player, std::move(tank));
+                tanks_.push_back(std::move(tankInfo));
+                ++tankCount;
+            }
+        }
+    }
+
+    if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination
+    if (tank_1_count == 0 && tank_2_count == 0) {
+        gameLog_ << "Tie, both players have zero tanks\n";
+    } else {
+        int winner = (tank_1_count == 0) ? 2 : 1;
+        size_t remaining = (winner == 1) ? tank_1_count : tank_2_count;
+        gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
+    }
+
+        // Update the game state and flush the logs
+        gameOver_ = true;
+        gameLog_.flush();
+        gameLog_.close();
+    }
+    return true;
+}
+
 // Function to run the game
-void GM_209277367_322542887::run() {
-    // Initialize players
-    player1_ = playerFactory_->create(1, width_, height_, maxSteps_, numShells_);
-    player2_ = playerFactory_->create(2, width_, height_, maxSteps_, numShells_);
+void GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
+        size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
+        TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0) {
+    width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = player1, player2_ = player2;
+    player1TankFactory_ = player1_tank_algo_factory;
+    player2TankFactory_ = player2_tank_algo_factory ? player2_tank_algo_factory : player1_tank_algo_factory;
+
+    initiateGame(map, map_width, map_height); // Copy game board and initiate tanks
 
     // std::cout << "\nGame Started!" << endl;
     // if (visualMode_) { writeBoardToJson(); }// Visualisation

@@ -8,6 +8,8 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <mutex>
+#include "AbstractGameManager.h"
 #include "../UserCommon/UC_include/ExtSatelliteView.h"
 
 namespace fs = std::filesystem;
@@ -15,6 +17,7 @@ using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair
 
 class Simulator {
 public:
+    Simulator(bool verbose, size_t numThreads);
     virtual ~Simulator() = default;
 
 protected:
@@ -29,6 +32,12 @@ protected:
         ofstream* inputErrors = nullptr;
     };
 
+    bool verbose_;
+    size_t numThreads_;
+    void* gameManagerHandle_ = nullptr;
+    GameManagerFactory gameManagerFactory_;
+    std::mutex stderrMutex_;
+
     MapData readMap(const std::string& file_path);
     string Simulator::timestamp();
 
@@ -38,7 +47,7 @@ private:
     bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& inputFile, ofstream &inputErrors);
     tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file, Simulator::MapData &mapData,
         ofstream &inputErrors);
-    bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErrors)
+    bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErrors);
 
     std::optional<MapData> map_;
 };

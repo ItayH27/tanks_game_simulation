@@ -1,6 +1,8 @@
 #include "../sim_include/Simulator.h"
 #include "sim_include/Simulator.h"
-#include "sim_include/Simulator.h"
+
+Simulator::Simulator(bool verbose, size_t numThreads)
+    : verbose_(verbose), numThreads_(numThreads) {}
 
 /**
  * @brief Extracts an integer value from a configuration line in the map file.
@@ -135,6 +137,12 @@ tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, 
         for (int j = 0; j < mapData.cols; ++j) { // Iterate through each cell in the line
             char cell = (j < static_cast<int>(line.size())) ? line[j] : ' ';  // Fill missing columns with spaces
             gameBoard[i][j] = cell; // Update the gameboard with the new cell
+
+            if (cell != '#' && cell != '@' && cell != ' ') { // Unknown character
+                inputErrors << "Error recovered from: Unknown character '" << cell << "' at row " << i << ", column " << j << ". Treated as space.\n";
+                cell = ' ';
+                hasErrors = true;
+            }
         }
 
         ++i;
@@ -182,17 +190,6 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
     // input_error.txt initialisation
     bool has_errors = false; // Flag to indicate if there are any errors in the file
     ofstream input_errors("input_errors.txt"); // Open file to store errors
-
-    // TODO: Figure out if this is necessary and if it is pass it to the the game manager somehow
-    // Open game log
-    fs::path actual_path(file_path);
-    string file_name = actual_path.stem().string(); // Get the file name without extension
-    gameLog_.open("output_" + file_name + ".txt");
-    if (!gameLog_.is_open()) { // Failed to create game log
-        std::cerr << "Failed to open game log file." << std::endl;
-        remove("input_errors.txt");
-        return;
-    }
 
     // Open file
     ifstream file(file_path);
