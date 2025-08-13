@@ -1,7 +1,7 @@
-#include "Algo_include//TankAlgorithm_209277367_322542887.h"
+#include "TankAlgorithm_209277367_322542887.h"
 
-#include "UC_include/ExtBattleInfo.h"
-#include "GM_include/GM_209277367_322542887.h"
+#include "ExtBattleInfo.h"
+
 #include "TankAlgorithmRegisteration.h"
 
 using namespace Algorithm_209277367_322542887;
