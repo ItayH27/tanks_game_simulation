@@ -1,0 +1,13 @@
+# Dockerfile
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    gdb \
+    ninja-build \
+    pkg-config \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV CMAKE_GENERATOR=Ninja
