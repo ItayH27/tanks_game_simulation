@@ -233,8 +233,8 @@ bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) 
     const SatelliteView& viewA = *a.gameState;
     const SatelliteView& viewB = *b.gameState;
 
-    for (size_t y = 0; y < mapData_.rows; y++) {
-        for (size_t x = 0; x < mapData_.cols; x++) {
+    for (int y = 0; y < mapData_.rows; y++) {
+        for (int x = 0; x < mapData_.cols; x++) {
             if (viewA.getObjectAt(x,y) != viewB.getObjectAt(x,y)) {
                 return false;
             }
@@ -315,7 +315,7 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         auto group = move(groups.back());
         groups.pop_back();
 
-        for (int i = 0; i < group.gm_names.size()-1 ; i++) {
+        for (size_t i = 0; i < group.gm_names.size()-1 ; i++) {
             oss << group.gm_names[i] << ", ";
         }
         oss << group.gm_names[group.gm_names.size() - 1] << "\n"

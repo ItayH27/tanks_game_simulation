@@ -37,15 +37,15 @@ protected:
     std::mutex stderrMutex_;
 
     MapData readMap(const std::string& file_path);
-    string Simulator::timestamp();
+    string timestamp();
 
 private:
     bool extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number,
         Simulator::MapData &mapData, ofstream &inputErrors);
-    bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& inputFile, ofstream &inputErrors);
-    tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file, Simulator::MapData &mapData,
+    bool extractValues(Simulator::MapData &mapData, ifstream& inputFile, ofstream &inputErrors);
+    tuple<bool, int, int> fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file, Simulator::MapData &mapData,
         ofstream &inputErrors);
-    bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErrors);
+    bool checkForExtras(int extraRows, int extraCols, ofstream &inputErrors);
 
     std::optional<MapData> map_;
 };

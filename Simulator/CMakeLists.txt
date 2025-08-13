@@ -14,22 +14,6 @@
 #   - Provide the auto-registration *implementations* here, e.g.:
 #       PlayerRegistration.cpp, TankAlgorithmRegistration.cpp, GameManagerRegistration.cpp,
 #     and any registrar/helper used to store discovered factories.
-#   - At runtime, the Simulator dlopens Algorithm_*.so and GameManager_*.so, which
-#     contain REGISTER_* static objects that call into these constructors.
-#
-# Usage (from Simulator/):
-#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSUBMITTER_IDS=<id1>_<id2>
-#   cmake --build build --config Release
-# Run (examples):
-#   ./build/simulator_<id1>_<id2> -comparative game_map=<map> game_managers_folder=<dir> \
-#       algorithm1=<a1.so> algorithm2=<a2.so> [num_threads=<n>] [-verbose]
-#   ./build/simulator_<id1>_<id2> -competition game_maps_folder=<maps_dir> \
-#       game_manager=<gm.so> algorithms_folder=<algos_dir> [num_threads=<n>] [-verbose]
-#
-# Assignment references:
-# - Simulator is the executable; loads .so plugins; provides registration implementations.
-# - Command-line modes and naming conventions for artifacts.
-#
 
 cmake_minimum_required(VERSION 3.16)
 project(SimulatorProj LANGUAGES CXX)
@@ -51,11 +35,34 @@ if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     set(TOP_LEVEL ON)
 endif()
 
-# ---- Sources (your layout) ----
+# --------------------------------------
+# UserCommon: build once as a static lib
+# --------------------------------------
+# All your shared sources live under ../UserCommon/UC_src
+file(GLOB UC_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_src/*.cpp)
+
+if(UC_SOURCES STREQUAL "")
+    message(FATAL_ERROR "No sources under UserCommon/UC_src")
+endif()
+
+add_library(usercommon STATIC ${UC_SOURCES})
+target_include_directories(usercommon PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include
+        ${CMAKE_CURRENT_LIST_DIR}/../common
+)
+
+# For shared linking scenarios elsewhere, PIC is nice to have even on static libs
+set_target_properties(usercommon PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# --------------------------------------
+# Simulator executable and sources
+# --------------------------------------
 file(GLOB_RECURSE SIM_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cpp
         ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cc
-        ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cxx)
+        ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cxx
+)
 
 if(SIM_SOURCES STREQUAL "")
     message(FATAL_ERROR "No sources under Simulator/sim_src")
@@ -64,12 +71,14 @@ endif()
 set(TARGET_NAME simulator_${SUBMITTER_IDS})
 add_executable(${TARGET_NAME} ${SIM_SOURCES})
 
+set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS ON)
+
 # Exact output name required by the assignment: simulator_<ids>
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "simulator_${SUBMITTER_IDS}"
 )
 
-# Includes:
+# Includes for the simulator target
 target_include_directories(${TARGET_NAME}
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/sim_include
@@ -86,7 +95,12 @@ endif()
 
 # Threads (std::thread) and dlopen/dlsym/dlclose on Linux
 find_package(Threads REQUIRED)
-target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads dl)
+target_link_libraries(${TARGET_NAME}
+        PRIVATE
+        usercommon
+        Threads::Threads
+        dl
+)
 
 # Put built exe in a local bin/ only when building this dir directly
 if (TOP_LEVEL)

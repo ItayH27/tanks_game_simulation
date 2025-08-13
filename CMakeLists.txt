@@ -52,6 +52,10 @@ add_subdirectory(GameManager)  # builds GameManager_<ids>.so
 add_subdirectory(Algorithm)    # builds Algorithm_<ids>.so
 add_subdirectory(Simulator)    # builds simulator_<ids> (with main)
 
+set_target_properties(simulator_${SUBMITTER_IDS} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 # Convenience meta-target to build everything in one go
 add_custom_target(build_all
         DEPENDS
@@ -87,7 +91,8 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/*.cpp")
         foreach(src ${TEST_SOURCES})
             get_filename_component(name ${src} NAME_WE)
-            add_executable(${name} ${src})
+            add_executable(${name} ${src}
+                    UserCommon/UC_src/ExtSatelliteView.cpp)
             target_compile_features(${name} PRIVATE cxx_std_17)
 
             # Tests see public headers they need (no linking to the plugins).
