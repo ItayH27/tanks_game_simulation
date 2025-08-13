@@ -14,7 +14,7 @@
 #include <utility>
 #include <condition_variable>
 
-#include "sim_include/GameManagerRegistrar.h"
+#include "GameManagerRegistrar.h"
 
 using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_iterator, std::ofstream, std::ostringstream, std::ranges::sort;
 
