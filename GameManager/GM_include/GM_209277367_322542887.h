@@ -108,13 +108,11 @@ namespace GameManager_209277367_322542887 {
         void updateGameLog();
         void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
             unique_ptr<SatelliteView> game_state, size_t rounds);
-        bool initiateGame(const SatelliteView& gameBoard, int width, int height);
-        void GM_209277367_322542887::handleTankCollisionAt( TankInfo& tank, int old_x, int old_y, int new_x, int new_y, Direction dir, char next_cell);
-        void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell);
-        bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator& it);
-        bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it);
-        void GM_209277367_322542887::handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it);
-
-        // void writeBoardToJson() const; // Visualisation
+        bool initiateGame(const SatelliteView& gameBoard);
+        void handleTankCollisionAt( TankInfo& tank, int old_x, int old_y, int new_x, int new_y, Direction dir, char next_cell);
+        void clearPreviousShellPosition(Shell& shell);
+        bool handleShellSpawnOnTank(Shell& shell, ShellIterator& it);
+        bool handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it);
+        void handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it);
     };
 }
