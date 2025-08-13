@@ -26,7 +26,6 @@ bool Simulator::extractLineValue(const std::string &line, int &value, const std:
     // Check if the line has the correct format
     const std::string format = key + "=%d"; // Format for the line
     if (sscanf(no_space_line.c_str(), format.c_str(), &value) != 1) {
-        // TODO: What to do instead of this...
         inputErrors << "Error: Invalid " << key << " format on line " << line_number << ".\n";
         mapData.failedInit = true;
         return false;

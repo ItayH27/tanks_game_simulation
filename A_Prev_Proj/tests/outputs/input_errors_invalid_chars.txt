@@ -1,5 +1,0 @@
-Error recovered from: Extra 3 columns at row 0 ignored.
-Error recovered from: Unknown character 'X' at row 0, column 2. Treated as space.
-Error recovered from: Extra 3 columns at row 1 ignored.
-Error recovered from: Unknown character 'Y' at row 1, column 0. Treated as space.
-Error recovered from: Extra 6 columns beyond declared width ignored.

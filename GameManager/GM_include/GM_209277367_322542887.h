@@ -5,9 +5,12 @@
 #include <fstream>
 #include <set>
 #include <iostream>
+#include <map>
+#include <mutex>
+#include <filesystem>
 
+#include "AbstractGameManager.h"
 #include "../../common/GameResult.h"
-#include "../common/PlayerFactory.h" // FIX
 #include "../../common/TankAlgorithm.h" // FIX
 #include "../common/SatelliteView.h"
 #include "../common/Player.h"
@@ -16,6 +19,9 @@
 #include "../UserCommon/UC_include/Shell.h"
 #include "../common/ActionRequest.h"
 #include "../../common/SatelliteView.h"
+#include "../../common/ActionRequest.h"
+#include "../UserCommon/UC_include/ExtSatelliteView.h"
+
 
 #define GAME_OVER_NO_AMMO 40 // Number of turns to wait after no ammo condition is met
 #define NUM_OF_DIRECTIONS 8 // Number of directions
@@ -29,21 +35,21 @@
 using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl;
 using TankIterator = std::vector<std::unique_ptr<TankInfo>>::iterator;
 using ShellIterator = std::vector<std::unique_ptr<Shell>>::iterator;
+namespace fs = std::filesystem;
 
 namespace GameManager_209277367_322542887 {
-    class GM_209277367_322542887 {
+    class GM_209277367_322542887 : public AbstractGameManager {
+
     public:
-        GM_209277367_322542887(bool verbose); // Constructor
+        explicit GM_209277367_322542887(bool verbose); // Constructor
         GM_209277367_322542887& operator=(const GM_209277367_322542887&) = delete; // Copy assignment
         GM_209277367_322542887(GM_209277367_322542887&&) noexcept = delete; // Move constructor
         GM_209277367_322542887& operator=(GM_209277367_322542887&&) noexcept = delete; // Move assignment
         ~GM_209277367_322542887() = default; // Destructor
 
-        void readBoard(const string& file_path);
-        bool failedInit() const;
-        void run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
+        GameResult run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
             size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
-            TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0);
+            TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory) override;
         pair<int, int> getGameboardSize() const;
 
         void setVisualMode(bool visual_mode); // Visualisation
@@ -52,8 +58,8 @@ namespace GameManager_209277367_322542887 {
         function<std::unique_ptr<TankAlgorithm>(int, int)> player1TankFactory_; // Factory for creating tank algorithms
         function<std::unique_ptr<TankAlgorithm>(int, int)> player2TankFactory_;
         unique_ptr<SatelliteView> satellite_view_ = nullptr; // Satellite view for the game
-        unique_ptr<Player> player1_; // Player 1
-        unique_ptr<Player> player2_; // Player 2
+        Player* player1_; // Player 1
+        Player* player2_; // Player 2
         vector<vector<char>> gameboard_; // Game board represented as a 2D vector
         vector<unique_ptr<TankInfo>> tanks_;
         set<size_t> destroyedTanksIndices_; // Set of tank indices to delete
@@ -71,13 +77,13 @@ namespace GameManager_209277367_322542887 {
         size_t noAmmoTimer_ = false; // Timer for no ammo condition
         size_t numTanks1_ = 0;
         size_t numTanks2_ = 0;
+        bool verbose_ = false;
         vector<vector<char>> lastRoundGameboard_;
         vector<pair<ActionRequest, bool>> tankActions_;
 
         // bool visualMode_; // Visualisation
 
         // Base functions
-        bool extractLineValue(const string& line, int& value, const string& key, size_t line_number);
         void getTankActions();
         bool performAction(ActionRequest action, TankInfo& tank);
         void performTankActions();
@@ -102,7 +108,8 @@ namespace GameManager_209277367_322542887 {
         void updateGameLog();
         void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
             unique_ptr<SatelliteView> game_state, size_t rounds);
-        bool initiateGame(unique_ptr<SatelliteView> gameBoard,  int width, int height);
+        bool initiateGame(const SatelliteView& gameBoard, int width, int height);
+        void GM_209277367_322542887::handleTankCollisionAt( TankInfo& tank, int old_x, int old_y, int new_x, int new_y, Direction dir, char next_cell);
         void GM_209277367_322542887::clearPreviousShellPosition(Shell& shell);
         bool GM_209277367_322542887::handleShellSpawnOnTank(Shell& shell, ShellIterator& it);
         bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it);

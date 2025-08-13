@@ -1,259 +1,14 @@
 #include "../GM_include/GM_209277367_322542887.h"
 
-#include <string>
-#include <iostream>
-#include <map>
-#include "../UserCommon/UC_include/ExtSatelliteView.h"
-
-// Visualisation includes
-#include "json.hpp"
-#include <fstream>
-#include <thread>
-#include <chrono>
-#include <filesystem>
-#include <mutex>
-
+#include "../../common/GameManagerRegistration.h"
 #include "../Simulator/sim_include/AlgorithmRegistrar.h"
 
-using std::move, std::endl, std::getline, std::make_unique, std::make_pair, std::filesystem::path;
+using std::move, std::endl, std::getline, std::make_unique, std::make_pair, fs::path;
 
 using namespace GameManager_209277367_322542887;
 REGISTER_GAME_MANAGER(GM_209277367_322542887);
 
-// // Visualisation
-// void GM_209277367_322542887::writeBoardToJson() const {
-//     std::vector<std::vector<std::string>> serializable;
-//
-//     for (const auto& row : gameboard_) {
-//         std::vector<std::string> new_row;
-//         for (char cell : row) {
-//             new_row.emplace_back(1, cell);
-//         }
-//         serializable.push_back(new_row);
-//     }
-//
-//     nlohmann::json j;
-//     j["board"] = serializable;
-//     j["turn"] = turn_;
-//     j["gameOver"] = gameOver_;
-//     j["maxSteps"] = maxSteps_;
-//     j["player1Tanks"] = numTanks1_;
-//     j["player2Tanks"] = numTanks2_;
-//
-//     if (gameOver_) {
-//         std::ostringstream winner_msg;
-//
-//         if (gameOverStatus_ == 1)
-//             winner_msg << "Player 2 won with " << numTanks2_ << " tanks still alive";
-//         else if (gameOverStatus_ == 2)
-//             winner_msg << "Player 1 won with " << numTanks1_ << " tanks still alive";
-//         else if (gameOverStatus_ == 3)
-//             winner_msg << "Tie, both players have zero tanks";
-//         else if (turn_ >= maxSteps_)
-//             winner_msg << "Tie, reached max steps = " << maxSteps_
-//                        << ", player 1 has " << numTanks1_
-//                        << " tanks, player 2 has " << numTanks2_ << " tanks";
-//
-//         j["winner"] = winner_msg.str();
-//     }
-//
-//     std::ofstream out("visualizer/game_state.json");
-//     out << j.dump(2);
-// }
-
-// // Visualisation
-// void GM_209277367_322542887::setVisualMode(const bool visual_mode) { this->visualMode_ = visual_mode; }
-
-// Constructor for GameManager class
-// GM_209277367_322542887::GM_209277367_322542887(unique_ptr<PlayerFactory> player_factory, unique_ptr<TankAlgorithmFactory> tank_factory) : playerFactory_(
-//         std::move(player_factory)), tankFactory_(std::move(tank_factory)), player1_(nullptr),
-//     player2_(nullptr), gameResult_{}, numShells_(0), maxSteps_(0), failedInit_(false), gameOver_(false), width_(0), height_(0),
-//     turn_(0), noAmmoFlag_(false), gameOverStatus_(0), noAmmoTimer_(GAME_OVER_NO_AMMO) {}
-//     // visualMode_(false)
-
 GM_209277367_322542887::GM_209277367_322542887(bool verbose) : verbose_(verbose) {}
-
-
-
-// Extract relevant value from a line of text
-bool GM_209277367_322542887::extractLineValue(const std::string& line, int& value, const std::string& key, const size_t line_number) {
-    string no_space_line;
-    for (const char ch : line) { // Remove spaces from the line
-        if (ch != ' ') no_space_line += ch;
-    }
-
-    // Check if the line has the correct format
-    const string format = key + "=%d"; // Format for the line
-    if (sscanf(no_space_line.c_str(), format.c_str(), &value) != 1) {
-        errorLog_ << "Error: Invalid " << key << " format on line " << line_number << ".\n";
-        failedInit_ = true;
-        return false;
-    }
-
-    return true; // Successfully extraction
-}
-
-// Function to read the game board from a file
-void GM_209277367_322542887::readBoard(const string& file_path) {
-    // input_error.txt initialisation
-    bool has_errors = false; // Flag to indicate if there are any errors in the file
-    ofstream input_errors("input_errors.txt"); // Open file to store errors
-
-    // Open game log
-    path actual_path(file_path);
-    string file_name = actual_path.stem().string(); // Get the file name without extension
-    gameLog_.open("output_" + file_name + ".txt");
-    if (!gameLog_.is_open()) { // Failed to create game log
-        std::cerr << "Failed to open game log file." << std::endl;
-        remove("input_errors.txt");
-        return;
-    }
-
-    // Open file
-    ifstream file(file_path);
-    if (!file) { // Failed to open file
-        std::cerr << "Error: Failed to open file: " << file_path << endl;
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-
-    string line;
-    size_t line_number = 0;
-
-    // Skip line 1 (map name)
-    getline(file, line);
-    ++line_number;
-
-    // Line 2: MaxSteps
-    if (!getline(file, line) || !extractLineValue(line, maxSteps_, "MaxSteps", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing MaxSteps.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 3: NumShells
-    if (!getline(file, line) || !extractLineValue(line, numShells_, "NumShells", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing NumShells.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 4: Rows
-    if (!getline(file, line) || !extractLineValue(line, height_, "Rows", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing Rows.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    // Line 5: Cols
-    if (!getline(file, line) || !extractLineValue(line, width_, "Cols", line_number)) { // Failed to read line
-        std::cerr << "Error: Missing Cols.\n";
-        remove("input_errors.txt");
-        failedInit_ = true;
-        return;
-    }
-    ++line_number;
-
-    gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
-
-    int tank_1_count = 0, tank_2_count = 0; // Count the number of tanks in each player
-    int i = 0; // Current row
-    int extra_rows = 0;
-    int extra_cols = 0;
-
-    // Read the rest of the file
-    while (getline(file, line)) {
-        if (i >= height_) { // Check if we have reached the end of the file
-            ++extra_rows;
-            continue;
-        }
-
-        // Check if line has more characters than expected width
-        if (static_cast<int>(line.size()) > width_) {
-            extra_cols += static_cast<int>(line.size()) - width_;
-            input_errors << "Error recovered from: Extra " << (static_cast<int>(line.size()) - width_) << " columns at row "
-                    << i << " ignored.\n";
-            has_errors = true;
-        }
-
-        // Truncate the line to fit the declared width
-        line = line.substr(0, width_);
-
-        for (int j = 0; j < width_; ++j) { // Iterate through each cell in the line
-            char cell = (j < static_cast<int>(line.size())) ? line[j] : ' ';  // Fill missing columns with spaces
-
-            if (cell == '1') { // Cell contains a tank of player 1
-                auto tank = tankFactory_->create(1, tank_1_count); // Create a new tank for player 1
-                auto tank_info = make_unique<TankInfo>(tank_1_count, make_pair(j, i),
-                    numShells_, 1, std::move(tank)); // Create a new TankInfo for the tank
-                tanks_.push_back(std::move(tank_info)); // Add tank 1 to vector
-                ++tank_1_count;
-
-            } else if (cell == '2') { // Cell contains a tank of player 2
-                auto tank = tankFactory_->create(2, tank_2_count); // Create a new tank for player 2
-                auto tank_info = make_unique<TankInfo>(tank_2_count, make_pair(j, i),
-                    numShells_, 2, std::move(tank)); // Create a new TankInfo for the tank
-                tanks_.push_back(std::move(tank_info)); // Add tank 2 to vector
-                ++tank_2_count;
-
-            } else if (cell != '#' && cell != '@' && cell != ' ') { // Unknown character
-                input_errors << "Error recovered from: Unknown character '" << cell << "' at row " << i << ", column " << j << ". Treated as space.\n";
-                cell = ' ';
-                has_errors = true;
-            }
-
-            gameboard_[i][j] = cell; // Update the gameboard with the new cell
-        }
-
-        ++i;
-    }
-
-    // Check for extra rows and columns
-    if (extra_rows > 0) {
-        input_errors << "Error recovered from: Extra " << extra_rows << " rows beyond declared height ignored.\n";
-        has_errors = true;
-    }
-    // Check for extra columns
-    if (extra_cols > 0) {
-        input_errors << "Error recovered from: Extra " << extra_cols << " columns beyond declared width ignored.\n";
-        has_errors = true;
-    }
-
-    // Check for missing tanks
-    if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination conditions
-        if (tank_1_count == 0 && tank_2_count == 0) { // Check if both players have no tanks
-            gameLog_ << "Tie, both players have zero tanks\n";
-
-        } else if (tank_1_count == 0) { // Check if player 1 has no tanks
-            gameLog_ << "Player 2 won with " << tank_2_count << " tanks still alive\n";
-
-        } else if (tank_2_count == 0) { // Check if player 2 has no tanks
-            gameLog_ << "Player 1 won with " << tank_1_count << " tanks still alive\n";
-        }
-
-        // Update the game state and flush the logs
-        gameOver_ = true;
-        gameLog_.flush();
-        gameLog_.close();
-    }
-
-    // Delete input_errors.txt if no errors were found
-    if (!has_errors) {
-        remove("input_errors.txt");
-    }
-}
-
-// Function to return if the game init failed
-bool GM_209277367_322542887::failedInit() const {
-    return failedInit_;
-}
 
 // Function to get actions for both tanks
 void GM_209277367_322542887::getTankActions() {
@@ -361,72 +116,6 @@ void GM_209277367_322542887::shoot(TankInfo& tank) {
             break;}
     }
 }
-
-// Function to move tank
-// void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
-//     // Get the current location of the tank
-//     auto [fst, snd] = tank.getLocation();
-//     const int x = fst;
-//     const int y = snd;
-//     Direction dir = tank.getDirection(); // Get the direction of the tank
-//
-//     gameboard_[y][x] = ' '; // Clear the previous position of the tank
-//     if (action == ActionRequest::MoveBackward) { // If moving backward, Update technical direction
-//         dir = static_cast<Direction>((static_cast<int>(dir) + 4) % NUM_OF_DIRECTIONS);
-//     }
-//
-//     // Calculate the new position based on the direction
-//     auto [new_x, new_y] = nextLocation(x, y, dir);
-//     char next_cell = gameboard_[new_y][new_x];
-//
-//     // Check the next cell for obstacles
-//     if (next_cell == ' ') { // If the next cell is empty
-//         // Update the tank's location and gameboard
-//         gameboard_[new_y][new_x] = static_cast<char>('0' + tank.getPlayerId());
-//         tank.setLocation(new_x, new_y);
-//
-//     } else if (next_cell == '@') {// If the next cell is a mine
-//         // Update the tank's location and gameboard
-//         const int tank_index = getTankIndexAt(x, y);
-//         destroyedTanksIndices_.insert(tank_index); // Mark the tank for deletion
-//         tanks_[tank_index]->increaseTurnsDead();
-//         gameboard_[new_y][new_x] = ' ';
-//
-//         // Log the action
-//         // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Hit a mine at (" << new_x << ", " << new_y << ")" << endl;
-//     }
-//     else if (next_cell == '*') {
-//         const ShellIterator shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
-//         int other_shell_dir = static_cast<int>((*shell_it)->getDirection()); // Get the direction of the other shell
-//
-//         // Destroy tank if opposite of shells movement
-//         if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) {
-//             const int tank_index = getTankIndexAt(x, y);
-//             destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
-//             tanks_[tank_index]->increaseTurnsDead();
-//             deleteShell(shell_it); // Delete the shell
-//             gameboard_[new_y][new_x] = ' ';
-//         }
-//
-//         else {
-//             gameboard_[new_y][new_x] = tank.getPlayerId() == 1 ? 'a' : 'b';
-//             tank.setLocation(new_x, new_y);
-//         }
-//     }
-//
-//     else { // If the next cell is occupied by another tank
-//         int tank_index = getTankIndexAt(x, y);
-//         destroyedTanksIndices_.insert(tank_index); // Mark the current tank for deletion
-//         tanks_[tank_index]->increaseTurnsDead();
-//         tank_index = getTankIndexAt(new_x, new_y);
-//         destroyedTanksIndices_.insert(tank_index); // Mark the other tank for deletion
-//         tanks_[tank_index]->increaseTurnsDead();
-//         gameboard_[new_y][new_x] = ' ';
-//
-//         // Log the action
-//         // cout << "Tank " << tank.getPlayerId() << "." << tank.getID() << " Collided with another tank at (" << new_x << ", " << new_y << ")" << endl;
-//     }
-// }
 
 void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action) {
     auto [x, y] = tank.getLocation();
@@ -597,7 +286,7 @@ bool GM_209277367_322542887::performAction(const ActionRequest action, TankInfo&
             break;
 
         case ActionRequest::GetBattleInfo: { // Get battle info
-            auto* player = (tank.getPlayerId() == 1 ? player1_.get() : player2_.get()); // Get the player based on tank ID
+            auto* player = (tank.getPlayerId() == 1 ? player1_ : player2_); // Get the player based on tank ID
             TankAlgorithm& tank_algo = *tank.getTank(); // Get the tank algorithm
             const char curr_loc = lastRoundGameboard_[tank.getLocation().second][tank.getLocation().first]; // Get the current tank location
             lastRoundGameboard_[tank.getLocation().second][tank.getLocation().first] = '%'; // Update the gameboard with the tank's position
@@ -703,123 +392,6 @@ ShellIterator GM_209277367_322542887::deleteShell(ShellIterator it) {
 
     return it;
 }
-
-// Function to move shells
-// void GM_209277367_322542887::moveShells(vector<unique_ptr<Shell>>& shells) {
-//     for (auto it = shells.begin(); it != shells.end();) { // Iterate through all shells
-//         Shell& shell = **it; // De-reference the iterator to get the shell
-//         auto [fst, snd] = shell.getLocation();
-//         const int x = fst;
-//         const int y = snd;
-//         Direction dir = shell.getDirection();
-//
-//         // Calculate the next location of the shell
-//         auto [new_x, new_y] = nextLocation(x, y, dir);
-//         const char next_cell = gameboard_[new_y][new_x];
-//
-//         // Shells spawned exactly on tanks
-//         if (gameboard_[y][x] == 'c' || gameboard_[y][x] == 'd') {
-//             if (const int tank_index = getTankIndexAt(x, y); tank_index != -1) {
-//                 destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
-//                 tanks_[tank_index]->increaseTurnsDead();
-//                 gameboard_[y][x] = ' '; // Remove the tank from the gameboard
-//
-//                 // cout << "Shell hit and destroyed players 1's tank  at: " << x << ", " << y << endl; // Log the shell collision
-//                 it = shells.erase(it); // Remove the shell from the vector
-//                 break;
-//             }
-//         }
-//
-//         // Unique cases of shell movement
-//         if (shell.isAboveMine()) { gameboard_[y][x] = '@'; shell.setAboveMine(false); } // Mark the shell's position on the gameboard
-//         if (gameboard_[y][x] == '^') { gameboard_[y][x] = '*'; } // Clear the previous position of the shell
-//         if (gameboard_[y][x] == 'a' || gameboard_[y][x] == 'b') { gameboard_[y][x] = gameboard_[y][x] == 'a' ? '1': '2'; } // Clear the previous position of the shell
-//         if (!(gameboard_[y][x] == '1' || gameboard_[y][x] == '2' || gameboard_[y][x] == '@')){ gameboard_[y][x] = ' '; } // Clear the previous position of the shell
-//
-//         // Check if the next cell is a wall, weakened wall, or tank
-//         switch(next_cell){
-//             case '#': // If next cell is a wall
-//                 gameboard_[new_y][new_x] = '$'; // Damage the wall
-//                 // cout << "Shell hit and weakened wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
-//                 it = shells.erase(it); // Remove the shell from the vector
-//                 break;
-//
-//             case '$': // If next cell is a weakened wall
-//                 gameboard_[new_y][new_x] = ' '; // Destroy the wall
-//                 // cout << "Shell hit and destroyed wall at: " << new_x << ", " << new_y << endl; // Log the shell collision
-//                 it = shells.erase(it); // Remove the shell from the vector
-//                 break;
-//
-//             case '1': {// If next cell is occupied by tank 1
-//                 if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) { //
-//                     //delete_tank(tank_it); // Delete tank 1
-//                     destroyedTanksIndices_.insert(tank_index); // Mark tank 1 for deletion
-//                     tanks_[tank_index]->increaseTurnsDead();
-//                     gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
-//
-//                     // cout << "Shell hit and destroyed players 1's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
-//                     it = shells.erase(it); // Remove the shell from the vector
-//                 }
-//                 break;}
-//
-//             case '2':{
-//                 if (const int tank_index = getTankIndexAt(new_x, new_y); tank_index != -1) {
-//                     gameboard_[new_y][new_x] = ' '; // Remove the tank from the gameboard
-//                     destroyedTanksIndices_.insert(tank_index); // Mark tank 2 for deletion
-//                     tanks_[tank_index]->increaseTurnsDead();
-//                     // cout << "Shell hit and destroyed players 2's tank  at: " << new_x << ", " << new_y << endl; // Log the shell collision
-//                     it = shells.erase(it); // Remove the shell from the vector
-//                 }
-//                 break;}
-//
-//             case '@': // If next cell is a mine
-//                 shell.setLocation(new_x, new_y); // Update the shell's location
-//                 gameboard_[new_y][new_x] = '*'; // Mark intersection of shell and mine
-//                 shell.setAboveMine(true); // Set the shell to be above the mine
-//                 ++it; // Move to the next shell
-//                 break;
-//
-//             case '*': {// If next cell is a shell
-//                 // cout << "Shells collided at: " << new_x << ", " << new_y << endl; // Log the shell collision
-//
-//                 ShellIterator other_shell_it = getShellAt(new_x, new_y); // Get the other shell at the new position
-//                 const int other_shell_dir = static_cast<int>((*other_shell_it)->getDirection());
-//                 if (static_cast<int>(dir) == ((other_shell_dir + 4) % NUM_OF_DIRECTIONS)) { // If the shells are in opposite directions
-//                     gameboard_[new_y][new_x] = ' '; // Mark the shell's position on the game board
-//
-//                     if (it < other_shell_it) { // If current shell is before the other shell
-//                         deleteShell(other_shell_it); // Delete the other shell
-//
-//                         it = shells.erase(it); // Remove the shell from the vector
-//                     }
-//                     else {
-//                         shells.erase(it); // Remove the shell from the vector
-//
-//                         it = deleteShell(other_shell_it); // Delete the other shell
-//                     }
-//
-//                     if (shells.empty()) { // If there are no more shells
-//                         goto last_elem; // If the iterator reaches the end, break out of the loop
-//                     }
-//                 }
-//                 else { // If the shells are not in opposite directions
-//                     (*it)->setLocation(new_x, new_y); // Update the shell's location
-//                     gameboard_[new_y][new_x] = '^'; // Mark the new position of the shell on the game board
-//                     ++it; // Move to the next shell if no deletion occurs
-//                 }
-//                 break;}
-//
-//             case ' ': // If next cell is empty
-//                 shell.setLocation(new_x, new_y); // Update the shell's location
-//                 gameboard_[new_y][new_x] = '*'; // Mark the new position of the shell on the gameboard
-//                 ++it; // Move to the next shell
-//                 break;
-//             default: ;
-//         }
-//     }
-// last_elem:
-//     return;
-// }
 
 void GM_209277367_322542887::moveShells(std::vector<std::unique_ptr<Shell>>& shells) {
     for (auto it = shells.begin(); it != shells.end();) {
@@ -962,7 +534,7 @@ void GM_209277367_322542887::checkShellsCollide() {
     }
 }
 
-bool GM_209277367_322542887::initiateGame(unique_ptr<SatelliteView> gameBoard, int width, int height) {
+bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard, int width, int height) {
     int tank_1_count = 0, tank_2_count = 0;
     gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
 
@@ -976,7 +548,7 @@ bool GM_209277367_322542887::initiateGame(unique_ptr<SatelliteView> gameBoard, i
                 int& tankCount = (player == 1) ? tank_1_count : tank_2_count;
                 auto& factory = (player == 1) ? player1TankFactory_ : player2TankFactory_;
 
-                auto tank = factory->create(player, tankCount);
+                auto tank = factory(player, tankCount);
                 auto tankInfo = std::make_unique<TankInfo>(tankCount, std::make_pair(j, i), numShells_, player, std::move(tank));
                 tanks_.push_back(std::move(tankInfo));
                 ++tankCount;
@@ -985,56 +557,44 @@ bool GM_209277367_322542887::initiateGame(unique_ptr<SatelliteView> gameBoard, i
     }
 
     if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination
-    if (tank_1_count == 0 && tank_2_count == 0) {
-        gameLog_ << "Tie, both players have zero tanks\n";
-    } else {
-        int winner = (tank_1_count == 0) ? 2 : 1;
-        size_t remaining = (winner == 1) ? tank_1_count : tank_2_count;
-        gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
-    }
+        if (tank_1_count == 0 && tank_2_count == 0) {
+            if (verbose_) gameLog_ << "Tie, both players have zero tanks\n";
+        } else {
+            int winner = (tank_1_count == 0) ? 2 : 1;
+            size_t remaining = (winner == 1) ? tank_1_count : tank_2_count;
+            if (verbose_) gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
+        }
 
-        // Update the game state and flush the logs
-        gameOver_ = true;
-        gameLog_.flush();
-        gameLog_.close();
+            // Update the game state and flush the logs
+            gameOver_ = true;
+            if (verbose_) gameLog_.flush();
+            if (verbose_) gameLog_.close();
     }
     return true;
 }
 
 // Function to run the game
-void GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
+GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, const SatelliteView& map, string map_name,
         size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
-        TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory = 0) {
-    width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = player1, player2_ = player2;
+        TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory) {
+
+    width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = &player1, player2_ = &player2;
     player1TankFactory_ = player1_tank_algo_factory;
-    player2TankFactory_ = player2_tank_algo_factory ? player2_tank_algo_factory : player1_tank_algo_factory;
+    player2TankFactory_ = player2_tank_algo_factory;
 
     initiateGame(map, map_width, map_height); // Copy game board and initiate tanks
 
-    // std::cout << "\nGame Started!" << endl;
-    // if (visualMode_) { writeBoardToJson(); }// Visualisation
+    std::cout << "\nGame Started!" << endl;
 
     // Game loop
     while (!gameOver_) { // Main game loop
-        // if (visualMode_) { writeBoardToJson(); }// Visualisation
-        // if (visualMode_) {
-        //     // Visualisation
-        //     std::filesystem::path flagPath = std::filesystem::current_path() / "visualizer" / "step.flag";
-        //     // std::cout << "Waiting for: " << flagPath << std::endl;
-        //
-        //     while (!std::filesystem::exists(flagPath)) {
-        //         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        //     }
-        //     std::filesystem::remove(flagPath);
-        // }
-
         // Set the gameboard to the last round's gameboard
         lastRoundGameboard_ = gameboard_;
 
         // Check if the maximum number of turns has been reached
         if (turn_ >= maxSteps_) {
             gameOver_ = true; // Set the game over flag
-            gameLog_ << "Tie, reached max steps = " << maxSteps_ << ", player 1 has " << numTanks1_ << " tanks, player 2 has "
+            if (verbose_) gameLog_ << "Tie, reached max steps = " << maxSteps_ << ", player 1 has " << numTanks1_ << " tanks, player 2 has "
                << numTanks2_ << " tanks" << endl;
             break; // Exit the loop
         }
@@ -1059,30 +619,31 @@ void GM_209277367_322542887::run(size_t map_width, size_t map_height, const Sate
             noAmmoTimer_--; // Decrease the no ammo timer
             if (noAmmoTimer_ == 0) { // Check if the timer has reached zero
                 updateGameResult(TIE, NO_SHELLS_GAME_OVER, {numTanks1_, numTanks2_},
-                    satellite_view_, turn_);
+                    move(satellite_view_), turn_);
                 gameOver_ = true; // Set game_over to true if both tanks are out of ammo for GAME_OVER_NO_AMMO turns
-            gameLog_ << "Tie, both players have zero shells for " << GAME_OVER_NO_AMMO << " steps" << endl; // Print message if both tanks are out of ammo
+            if (verbose_) gameLog_ << "Tie, both players have zero shells for " << GAME_OVER_NO_AMMO << " steps" << endl; // Print message if both tanks are out of ammo
             }
         }
 
         if (gameOver_) { // Check if the game is over
             if (gameOverStatus_ == 3) { // Both players are missing tanks
-                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, satellite_view_, turn_);
-                gameLog_ << "Tie, both players have zero tanks" <<  endl;
+                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, move(satellite_view_), turn_);
+                if (verbose_) gameLog_ << "Tie, both players have zero tanks" <<  endl;
             } else if (gameOverStatus_ == 1) { // Player 1 has no tanks left
-                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, turn_);
-                gameLog_ << "Player 2 won with " << numTanks2_ << " tanks still alive" << endl;
+                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, move(satellite_view_) ,turn_);
+                if (verbose_) gameLog_ << "Player 2 won with " << numTanks2_ << " tanks still alive" << endl;
             } else if (gameOverStatus_ == 2) { // Player 2 has no tanks left
-                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, turn_);
-                gameLog_ << "Player 1 won with " <<  numTanks1_ << " tanks still alive" << endl;
+                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, move(satellite_view_) , turn_);
+                if (verbose_) gameLog_ << "Player 1 won with " <<  numTanks1_ << " tanks still alive" << endl;
             }
 
-            // if (visualMode_) { writeBoardToJson(); }// Visualisation
-            // break; // Exit the game loop if the game is over
+            break; // Exit the game loop if the game is over
         }
 
         ++turn_; // Increment the turn counter
     }
+
+    return move(gameResult_);
 }
 
 // Function to calc next location
@@ -1174,22 +735,22 @@ pair<int, int> GM_209277367_322542887::getGameboardSize() const {
 
 void GM_209277367_322542887::updateGameLog() {
     for (int i = 0; i < static_cast<int>(tanks_.size()); ++i) {
-        if (i != 0) { gameLog_ << " "; }
+        if (i != 0) { if (verbose_) gameLog_ << " "; }
 
         int tank_state = tanks_[i]->getIsAlive();
         if (tank_state == 0) {
-            gameLog_ << getEnumName(tankActions_[i].first);
-            if (!tankActions_[i].second) { gameLog_ << " (ignored)"; }
+            if (verbose_) gameLog_ << getEnumName(tankActions_[i].first);
+            if (!tankActions_[i].second) { if (verbose_) gameLog_ << " (ignored)"; }
         }
         else if (tank_state == 1) {
-            if (!tankActions_[i].second) { gameLog_ << " (ignored)"; }
-            gameLog_ << getEnumName(tankActions_[i].first) << " (killed)";
+            if (!tankActions_[i].second) { if (verbose_) gameLog_ << " (ignored)"; }
+            if (verbose_) gameLog_ << getEnumName(tankActions_[i].first) << " (killed)";
             tanks_[i]->increaseTurnsDead();
         }
-        else {gameLog_ << "killed"; }
+        else {if (verbose_) gameLog_ << "killed"; }
 
-        if (i != static_cast<int>(tanks_.size()) - 1) { gameLog_ << ","; }
+        if (i != static_cast<int>(tanks_.size()) - 1) { if (verbose_) gameLog_ << ","; }
     }
 
-    gameLog_ << endl;
+    if (verbose_) gameLog_ << endl;
 }

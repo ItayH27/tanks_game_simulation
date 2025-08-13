@@ -14,7 +14,7 @@
 using std::string, std::vector, std::unordered_map, std::mutex, std::shared_ptr, std::lock_guard, std::pair,
     std::unique_ptr, std::ofstream, std::ifstream, std::sort, std::cout, std::endl, std::exception, std::make_shared,
     std::min, std::thread;
-namespace fs = fs;
+namespace fs = std::filesystem;
 
 class CompetitiveSimulator : public Simulator {
 #ifdef UNIT_TEST
@@ -44,6 +44,8 @@ private:
     unordered_map<string, string> algoNameToPath_;
     unordered_map<string, int> algoUsageCounts_;
     mutex handlesMutex_;
+    void* gameManagerHandle_ = nullptr;
+    GameManagerFactory gameManagerFactory_;
 
     bool loadGameManager(const string& soPath);
     bool getAlgorithms(const string& folder);
