@@ -76,6 +76,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS ON)
 # Exact output name required by the assignment: simulator_<ids>
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "simulator_${SUBMITTER_IDS}"
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/..
 )
 
 # Includes for the simulator target
@@ -101,10 +102,3 @@ target_link_libraries(${TARGET_NAME}
         Threads::Threads
         dl
 )
-
-# Put built exe in a local bin/ only when building this dir directly
-if (TOP_LEVEL)
-    set_target_properties(${TARGET_NAME} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin
-    )
-endif()

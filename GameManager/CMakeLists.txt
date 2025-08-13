@@ -74,7 +74,8 @@ target_sources(${TARGET_NAME} PRIVATE ${USERCOMMON_SOURCES})
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "GameManager_${SUBMITTER_IDS}"
         PREFIX ""                       # => GameManager_<ids>.so, not libGameManager_*.so
-        POSITION_INDEPENDENT_CODE ON)
+        POSITION_INDEPENDENT_CODE ON
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})  # <== Output here
 
 # Public includes:
 # - this project’s headers

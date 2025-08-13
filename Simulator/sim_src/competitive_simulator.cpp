@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <condition_variable>
 
+#include "GameManagerRegistrar.h"
 #include "../sim_include/Simulator.h"
 
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
@@ -78,9 +79,24 @@ int CompetitiveSimulator::run(const string& mapsFolder,
  * @return true if successfully loaded, false otherwise.
  */
 bool CompetitiveSimulator::loadGameManager(const string& soPath) {
-    gameManagerHandle_ = dlopen(soPath.c_str(), RTLD_LAZY);
-    if (!gameManagerHandle_) { // Failed to dlopen gamemanager
-        cerr << "dlopen failed: " << dlerror() << endl;
+    auto absPath = std::filesystem::absolute(soPath);
+    std::string soName = absPath.stem().string(); // filename without extension
+
+    auto& registrar = GameManagerRegistrar::getGameManagerRegistrar();
+    registrar.createEntry(soName);
+
+    gameManagerHandle_ = dlopen(absPath.c_str(), RTLD_LAZY);
+    if (!gameManagerHandle_) {
+        std::cerr << "dlopen failed: " << absPath << ":" << dlerror() << std::endl;
+        registrar.removeLast(); // cleanup
+        return false;
+    }
+
+    try {
+        registrar.validateLast();  // ensure REGISTER_GAME_MANAGER ran
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Validation failed: " << e.what() << std::endl;
+        registrar.removeLast();
         return false;
     }
 

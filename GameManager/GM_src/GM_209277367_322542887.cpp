@@ -1,7 +1,6 @@
 #include "../GM_include/GM_209277367_322542887.h"
 
 #include "../../common/GameManagerRegistration.h"
-#include "../Simulator/sim_include/AlgorithmRegistrar.h"
 
 using std::move, std::endl, std::getline, std::make_unique, std::make_pair, fs::path;
 
