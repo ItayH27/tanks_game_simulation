@@ -1,0 +1,7 @@
+Valid-MissingRows
+MaxSteps = 500
+NumShells=10
+Rows = 4
+Cols = 5
+1   2
+#####

@@ -1,0 +1,6 @@
+Invalid-NoP2
+MaxSteps = 500
+NumShells=10
+Rows = 1
+Cols = 3
+11@

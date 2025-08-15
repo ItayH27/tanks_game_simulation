@@ -11,8 +11,126 @@ cmake -S . -B build && cmake --build build -j
   algorithm2=algorithms_bin/Algorithm_209277367_322542887.so \
   num_threads=4 -verbose
 
-./Simulator/bin/simulator_209277367_322542887 -competition \
+./simulator_209277367_322542887 -competition \
     game_maps_folder=1_maps \
     game_manager=1_gm_so/GameManager_209277367_322542887.so \
     algorithms_folder=1_algo_so \
     num_threads=4 -verbose
+
+VSCode json files:
+tasks:
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: build all",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/tanks_game_simulation/build",
+                "--target",
+                "build_all",
+                "--config",
+                "Debug"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Comparative",
+            "type": "shell",
+            "dependsOn": ["CMake: build all"],
+            "command": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-comparative",
+                "game_map=1_maps/valid_map.txt",
+                "game_managers_folder=1_gm_so",
+                "algorithm1=1_algo_so/Algorithm_209277367_322542887.so",
+                "algorithm2=1_algo_so/Algorithm_209277367_322542888.so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Competition",
+            "type": "shell",
+            "dependsOn": ["CMake: build all"],
+            "command": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-competition",
+                "game_maps_folder=1_maps",
+                "game_manager=1_gm_so/GameManager_209277367_322542887.so",
+                "algorithms_folder=1_algo_so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}
+
+launch:
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Comparative",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-comparative",
+                "game_map=1_maps/valid_map.txt",
+                "game_managers_folder=1_gm_so",
+                "algorithm1=1_algo_so/Algorithm_209277367_322542887.so",
+                "algorithm2=1_algo_so/Algorithm_209277367_322542888.so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/tanks_game_simulation",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "CMake: build all"
+        },
+        {
+            "name": "Debug Competition",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-competition",
+                "game_maps_folder=1_maps",
+                "game_manager=1_gm_so/GameManager_209277367_322542887.so",
+                "algorithms_folder=1_algo_so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/tanks_game_simulation",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "CMake: build all"
+        }
+    ]
+}
+VSCode build:
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+

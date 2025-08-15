@@ -1,0 +1,7 @@
+Invalid-BadChar
+MaxSteps = 500
+NumShells=10
+Rows = 2
+Cols = 3
+1X2
+###

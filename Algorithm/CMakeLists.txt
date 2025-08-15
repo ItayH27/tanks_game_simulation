@@ -55,7 +55,8 @@ add_library(${TARGET_NAME} SHARED ${ALGO_SOURCES})
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "Algorithm_${SUBMITTER_IDS}"
         PREFIX ""                       # => Algorithm_<ids>.so, not libAlgorithm_*.so
-        POSITION_INDEPENDENT_CODE ON)
+        POSITION_INDEPENDENT_CODE ON
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}) # <== Output here
 
 # Includes:
 # - your algorithm headers
