@@ -1,0 +1,12 @@
+Unbalanced-2v7
+MaxSteps = 6000
+NumShells=25
+Rows = 8
+Cols = 10
+2 2 2 2   
+2      2  
+    1     
+          
+       1  
+    2     
+         

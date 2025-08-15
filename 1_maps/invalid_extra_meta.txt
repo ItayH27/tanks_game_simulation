@@ -1,0 +1,8 @@
+Invalid-ExtraMeta
+MaxSteps = 500
+NumShells=10
+Rows = 2
+Cols = 2
+Bonus=42
+1#
+#2

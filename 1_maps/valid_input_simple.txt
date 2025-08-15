@@ -1,0 +1,11 @@
+Simple-Battlefield
+MaxSteps = 4000
+NumShells=15
+Rows = 6
+Cols = 10
+1   #   2 
+    @     
+1        2
+  ###     
+     2    
+2   1   @ 

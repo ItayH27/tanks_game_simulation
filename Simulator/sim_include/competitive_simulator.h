@@ -8,7 +8,7 @@
 #include <mutex>
 #include <thread>
 #include "AlgorithmRegistrar.h"
-#include "GameManagerRegistration.h"
+#include "../../common/GameManagerRegistration.h"
 #include "Simulator.h"
 
 using std::string, std::vector, std::unordered_map, std::mutex, std::shared_ptr, std::lock_guard, std::pair,
