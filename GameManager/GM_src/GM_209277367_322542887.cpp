@@ -780,13 +780,16 @@ void GM_209277367_322542887::checkShellsCollide() {
  *       Tank coordinates are stored as (x=j, y=i).
  */
 bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard) {
+    // reset state if this can be called more than once
+    tanks_.clear();
+
     int tank_1_count = 0, tank_2_count = 0;
-    gameboard_.resize(height_, vector<char>(width_, ' ')); // Resize the gameboard to the declared dimensions
+    gameboard_.assign(height_, std::vector<char>(width_, ' '));
 
     for (int i = 0; i < height_; ++i) {
         for (int j = 0; j < width_; ++j) {
-            char cell = gameBoard.getObjectAt(i, j);
-            gameboard_[i][j] = cell; // Always update gameboard
+            char cell = gameBoard.getObjectAt(static_cast<size_t>(j), static_cast<size_t>(i));
+            gameboard_[i][j] = cell; // copy snapshot into our board
 
             if (cell == '1' || cell == '2') {
                 int player = cell - '0';
@@ -794,27 +797,30 @@ bool GM_209277367_322542887::initiateGame(const SatelliteView& gameBoard) {
                 auto& factory = (player == 1) ? player1TankFactory_ : player2TankFactory_;
 
                 auto tank = factory(player, tankCount);
-                auto tankInfo = std::make_unique<TankInfo>(tankCount, std::make_pair(j, i), numShells_, player, std::move(tank));
+                auto tankInfo = std::make_unique<TankInfo>(
+                    tankCount, std::make_pair(j, i), numShells_, player, std::move(tank)
+                );
                 tanks_.push_back(std::move(tankInfo));
                 ++tankCount;
             }
         }
     }
 
-    if (tank_1_count == 0 || tank_2_count == 0) { // Check for immediate game termination
-        if (tank_1_count == 0 && tank_2_count == 0) {
-            if (verbose_) gameLog_ << "Tie, both players have zero tanks\n";
-        } else {
-            int winner = (tank_1_count == 0) ? 2 : 1;
-            size_t remaining = (winner == 1) ? tank_1_count : tank_2_count;
-            if (verbose_) gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
+    // If a side has zero tanks, mark the game as over and log.
+    if (tank_1_count == 0 || tank_2_count == 0) {
+        if (verbose_) {
+            if (tank_1_count == 0 && tank_2_count == 0) {
+                gameLog_ << "Tie, both players have zero tanks\n";
+            } else {
+                int winner = (tank_1_count == 0) ? 2 : 1;
+                int remaining = (winner == 1) ? tank_1_count : tank_2_count; // winner's count
+                gameLog_ << "Player " << winner << " won with " << remaining << " tanks still alive\n";
+            }
         }
-
-            // Update the game state and flush the logs
-            gameOver_ = true;
-            if (verbose_) gameLog_.flush();
-            if (verbose_) gameLog_.close();
+        gameOver_ = true;
+        if (verbose_) { gameLog_.flush(); gameLog_.close(); }
     }
+
     return true;
 }
 

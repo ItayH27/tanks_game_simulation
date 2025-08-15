@@ -183,6 +183,7 @@ bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErro
 Simulator::MapData Simulator::readMap(const std::string& file_path) {
     int extraRows = 0, extraCols = 0;
     MapData mapData;
+    mapData.failedInit = false; // Reset failedInit flag
     string line;
 
     // input_error.txt initialisation

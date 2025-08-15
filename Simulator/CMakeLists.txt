@@ -29,6 +29,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ------- Added for debugging purposes -------
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# --------------------------------------
+
 # Detect if this dir is the top-level (so we can set local output dirs only then)
 set(TOP_LEVEL OFF)
 if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
@@ -73,6 +78,10 @@ add_executable(${TARGET_NAME} ${SIM_SOURCES})
 
 set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS ON)
 
+# ------- Added for debugging purposes -------
+target_link_options(${TARGET_NAME} PRIVATE -Wl,--export-dynamic) 
+# --------------------------------------------
+
 # Exact output name required by the assignment: simulator_<ids>
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "simulator_${SUBMITTER_IDS}"
@@ -89,7 +98,12 @@ target_include_directories(${TARGET_NAME}
 
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    # target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    # ------- Added for debugging purposes -------
+    target_compile_options(${TARGET_NAME} PRIVATE
+        $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>) 
+    # --------------------------------------------
+
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()

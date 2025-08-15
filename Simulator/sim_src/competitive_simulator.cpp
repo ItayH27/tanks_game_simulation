@@ -79,26 +79,39 @@ int CompetitiveSimulator::run(const string& mapsFolder,
  * @return true if successfully loaded, false otherwise.
  */
 bool CompetitiveSimulator::loadGameManager(const string& soPath) {
-    auto absPath = std::filesystem::absolute(soPath);
-    std::string soName = absPath.stem().string(); // filename without extension
+    auto absPath = fs::absolute(soPath);
+    string soName = absPath.stem().string();
 
     auto& registrar = GameManagerRegistrar::getGameManagerRegistrar();
     registrar.createEntry(soName);
 
     gameManagerHandle_ = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!gameManagerHandle_) {
-        std::cerr << "dlopen failed: " << absPath << ":" << dlerror() << std::endl;
-        registrar.removeLast(); // cleanup
+        std::cerr << "dlopen failed: " << absPath << ": " << dlerror() << std::endl;
+        registrar.removeLast();
         return false;
     }
 
     try {
-        registrar.validateLast();  // ensure REGISTER_GAME_MANAGER ran
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Validation failed: " << e.what() << std::endl;
-        registrar.removeLast();
-        return false;
-    }
+    registrar.validateLast(); // REGISTER_GAME_MANAGER ran and set a factory
+
+    // Build a callable that looks up the entry by name and calls create(verbose)
+    gameManagerFactory_ = [soName, &registrar](bool verbose) -> std::unique_ptr<AbstractGameManager> {
+        for (auto it = registrar.begin(); it != registrar.end(); ++it) {
+            if (it->name() == soName) {
+                return it->create(verbose);
+            }
+        }
+        throw std::runtime_error("GameManager not registered: " + soName);
+    };
+
+} catch (const std::exception& e) {
+    std::cerr << "Validation failed: " << e.what() << std::endl;
+    registrar.removeLast();
+    dlclose(gameManagerHandle_);
+    gameManagerHandle_ = nullptr;
+    return false;
+}
 
     return true;
 }
@@ -205,25 +218,24 @@ void CompetitiveSimulator::scheduleGames(const vector<fs::path>& maps) {
 void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
     lock_guard<mutex> lock(handlesMutex_);
 
-    if (algoPathToHandle_.count(algoNameToPath_[name])) {
-        // already loaded
-        return;
+    auto it = algoNameToPath_.find(name);
+    if (it == algoNameToPath_.end()) {
+        throw std::runtime_error("Unknown algorithm: " + name);
     }
-
-    const string& soPath = algoNameToPath_[name];
-    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
-    if (!handle) {
-        {
-            lock_guard<mutex> errLock(stderrMutex_);
-            cerr << "Error: Failed to load algorithm " << soPath << ": " << dlerror() << endl;
-        }
-        return;
-    }
-
-    algoPathToHandle_[soPath] = handle;
+    const std::string& soPath = it->second;
+    if (algoPathToHandle_.count(soPath)) return;
 
     auto& registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
     registrar.createAlgorithmFactoryEntry(name);
+
+    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
+    if (!handle) {
+        registrar.removeLast();
+        std::lock_guard<std::mutex> errLock(stderrMutex_);
+        throw std::runtime_error(std::string("Failed to load algorithm ") + soPath + ": " + dlerror());
+    }
+
+    algoPathToHandle_[soPath] = handle;
 
     try {
         registrar.validateLastRegistration();
@@ -292,12 +304,19 @@ void CompetitiveSimulator::runGames() {
         }
     };
 
-    // Create worker pool
     size_t threadCount = min(numThreads_, scheduledGames_.size());
-    for (size_t i = 0; i < threadCount; ++i) {
-        workers.emplace_back(worker);
+    if (threadCount == 1) { // Main thread runs all games sequentially
+        for (const auto& task : scheduledGames_) {
+            runSingleGame(task); // Run all games sequentially if only one thread
+        }
+        return;
     }
-
+    else { // Create a thread pool with the specified number of threads
+        for (size_t i = 0; i < threadCount; ++i) {
+                workers.emplace_back(worker);
+            }
+    }
+    
     // Wait for all threads to finish working
     for (auto& t : workers) {
         t.join();

@@ -41,6 +41,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ------- Added for debugging -------
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # ADD
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) # ADD
+# ------------------------------------
+
 # -------------------------
 # Sources & headers (your layout)
 # -------------------------
@@ -54,8 +59,10 @@ if(GM_SOURCES STREQUAL "")
 endif()
 
 set(TARGET_NAME GameManager_${SUBMITTER_IDS})
-add_library(${TARGET_NAME} SHARED ${GM_SOURCES}
-        ../UserCommon/UC_src/ExtSatelliteView.cpp)
+add_library(${TARGET_NAME} SHARED ${GM_SOURCES})
+        # ------- Removed for debugging - maybe should be removed in general -------
+       # ../UserCommon/UC_src/ExtSatelliteView.cpp)
+        # -------------------------
 
 # Pull in your shared implementations so their vtables live inside the GM .so
 file(GLOB USERCOMMON_SOURCES CONFIGURE_DEPENDS
@@ -89,7 +96,10 @@ target_include_directories(${TARGET_NAME}
 
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-, 
+    # -------- Added for debugging -------
+    $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
+    # --------------------------------------
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()

@@ -22,8 +22,6 @@ namespace {
         return fs::exists(path, ec) && fs::is_directory(path, ec) && !fs::is_empty(path, ec);
     }
 
-    // ---- token helpers ----
-    // Parse "key=value" (no spaces). On error returns {"",""}.
     inline std::pair<std::string, std::string> parseKeyVal(const std::string& tok) {
         const std::size_t eq = tok.find('=');
         if (eq == std::string::npos || eq == 0 || eq + 1 == tok.size()) return {"", ""};
@@ -33,8 +31,10 @@ namespace {
     // Parse num_threads if provided. Returns true on success and writes dst.
     inline bool parseNumThreads(const std::unordered_map<std::string, std::string>& args, std::optional<int>& dst) {
         auto it = args.find("num_threads");
-        if (it == args.end()) return true; // not provided → OK
-        // Accept only decimal positive integers (stoi throws on junk; we guard).
+        if (it == args.end()) {
+            dst = 1; // Default to 1 thread if not specified
+            return true; 
+        }
         const std::string& s = it->second;
         if (s.empty()) return false;
         int signFree = 0;
@@ -52,7 +52,6 @@ namespace {
         }
     }
 
-    // ---- mode validators ----
     ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
         static const std::vector<std::string> required = {
             "game_map", "game_managers_folder", "algorithm1", "algorithm2"
@@ -109,7 +108,6 @@ namespace {
     }
 } // namespace
 
-// ---- CmdParser implementation ----
 CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
     ParseResult res;
     res.mode = Mode::None;
