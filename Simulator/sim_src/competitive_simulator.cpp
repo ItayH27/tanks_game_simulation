@@ -134,13 +134,9 @@ bool CompetitiveSimulator::getAlgorithms(const string& folder) {
         if (entry.path().extension() == ".so") {
             const string soPath = entry.path().string();
             const string name = entry.path().stem().string();
-
-            // Record metadata — don't dlopen yet
-            {
-                lock_guard<mutex> lock(handlesMutex_);
-                algoNameToPath_[name] = soPath;
-                algoUsageCounts_[name] = 0;
-            }
+            
+            algoNameToPath_[name] = soPath;
+            algoUsageCounts_[name] = 0;
 
             ++soFound;
         }
