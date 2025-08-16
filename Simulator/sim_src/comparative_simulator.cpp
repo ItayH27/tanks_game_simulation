@@ -27,6 +27,13 @@ ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
 
 
 ComparativeSimulator::~ComparativeSimulator() {
+    
+    // Ensure algorithm objects are destroyed before unloading .so files
+    allResults.clear(); // if GameResult keeps algo-allocated objects
+    groups.clear(); // clear the groups vector
+    algo1_.reset();
+    algo2_.reset();
+
     lock_guard<mutex> lock(handlesMutex_);
     for (auto& handle : algoHandles_) {
         if (handle) {
@@ -391,10 +398,12 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         }
         oss << group.gm_names[group.gm_names.size() - 1] << "\n"
             << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
-            << group.result.rounds << "\n"
-            << endl;
+            << group.result.rounds << endl;
 
         printSatellite(oss, *group.result.gameState, mapData_.cols, mapData_.rows);
+        if (groups.size() > 0) {
+            oss << "\n";
+        }
     }
 
 
