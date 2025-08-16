@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <mutex>
 #include <thread>
+#include <atomic>
 #include "AlgorithmRegistrar.h"
 #include "../../common/GameManagerRegistration.h"
 #include "Simulator.h"
@@ -46,6 +47,7 @@ private:
     mutex handlesMutex_;
     void* gameManagerHandle_ = nullptr;
     GameManagerFactory gameManagerFactory_;
+    AlgorithmRegistrar* algoRegistrar_;
 
     bool loadGameManager(const string& soPath);
     bool getAlgorithms(const string& folder);

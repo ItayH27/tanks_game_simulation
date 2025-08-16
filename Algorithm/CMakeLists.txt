@@ -73,6 +73,24 @@ target_include_directories(${TARGET_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/../common
         ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include)
 
+# Link against your shared UserCommon lib
+target_link_libraries(${TARGET_NAME} PRIVATE usercommon)
+
+# Make sure the plugin can find libusercommon.so at runtime
+# (we'll place the .so next to the plugin)
+set_target_properties(${TARGET_NAME} PROPERTIES
+  BUILD_RPATH "\$ORIGIN"
+  INSTALL_RPATH "\$ORIGIN"
+)
+
+# After building the plugin, copy libusercommon.so next to it
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:usercommon>
+          $<TARGET_FILE_DIR:${TARGET_NAME}>
+)
+
+
 # Warnings
 if (MSVC)
     target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-,

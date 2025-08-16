@@ -891,8 +891,8 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
 
         updateGameLog();
 
-        // std::cout << "\nGame Board after turn " << turn_ << ":" << endl; // Print the game board after each turn
-        // printBoard(); // Print the game board
+        std::cout << "\nGame Board after turn " << turn_ << ":" << endl; // Print the game board after each turn
+        printBoard(); // Print the game board
 
         checkTanksStatus(); // Check if tanks are out of ammo and check for tanks alive
 
