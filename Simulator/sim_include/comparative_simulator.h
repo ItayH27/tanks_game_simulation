@@ -25,27 +25,25 @@ public:
             const string& gmFolder);
 private:
 
-    bool verbose_;
-    size_t numThreads_;
-    vector<void*> handles_;
+    vector<void*> algoHandles_;
+    mutex handlesMutex_;
     MapData mapData_ = {};
 
     // void* algorithmHandle1_ = nullptr;
     // void* algorithmHandle2_ = nullptr;
 
     AlgorithmRegistrar* algo_registrar;
-    GameManagerRegistrar game_manager_registrar;
+    GameManagerRegistrar* game_manager_registrar;
 
-    // AlgorithmRegistrar::AlgorithmAndPlayerFactories algorithmFactory1_;
-    // AlgorithmRegistrar::AlgorithmAndPlayerFactories algorithmFactory2_;
-
+    shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo1_;
+    shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo2_;
 
     static unordered_map<GameResult, vector<string>> gameResToGameManagers_;
 
     vector<path> gms_paths_;
 
-    bool loadSO (const string& path);
-
+    bool loadAlgoSO(const string& path);
+    void* loadGameManagerSO(const string& path);
     void getGameManagers(const string& gameManagerFolder);
     // bool loadGameManagers(const vector<path>& gms_Paths);
     void runGames();
