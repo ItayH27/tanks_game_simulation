@@ -20,6 +20,8 @@ using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_itera
 
 ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
     : Simulator(verbose, numThreads) {
+        algo_registrar = &AlgorithmRegistrar::getAlgorithmRegistrar();
+
 }
 
 ComparativeSimulator::~ComparativeSimulator() {
@@ -36,7 +38,6 @@ int ComparativeSimulator::run(const string& mapPath,
                               const string& algorithmSoPath2,
                               const string& gmFolder) {
     game_manager_registrar = GameManagerRegistrar::getGameManagerRegistrar();
-    algo_registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
 
     mapData_ = readMap(mapPath);
     if (!mapData_.failedInit) {
@@ -199,8 +200,8 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
     auto gm_name = gm->name();
 
     // Create players using the AlgorithmRegistrar
-    auto algo1 = algo_registrar.end();
-    auto algo2 = algo_registrar.begin();
+    auto algo1 = algo_registrar->end();
+    auto algo2 = algo_registrar->begin();
 
     unique_ptr<Player> player1 = algo1->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
     unique_ptr<Player> player2 = algo2->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);

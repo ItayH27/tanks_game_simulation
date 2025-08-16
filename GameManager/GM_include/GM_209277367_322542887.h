@@ -67,7 +67,7 @@ namespace GameManager_209277367_322542887 {
         GameResult gameResult_;
         int numShells_{}; // Number of shells for each tank
         int maxSteps_{}; // Maximum steps for the game
-        bool gameOver_; // Flag to indicate if the game is over
+        bool gameOver_{}; // Flag to indicate if the game is over
         int width_{}; // Width of the game board
         int height_{}; // Height of the game board
         int turn_{}; // Current turn number

@@ -9,12 +9,15 @@
 #include <iomanip>
 #include <filesystem>
 #include <condition_variable>
-
 #include "GameManagerRegistrar.h"
 #include "../sim_include/Simulator.h"
+#include "../sim_include/AlgorithmRegistrar.h"
+
 
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
-    : Simulator(verbose, numThreads) {}
+    : Simulator(verbose, numThreads) {
+        algoRegistrar_ = &AlgorithmRegistrar::getAlgorithmRegistrar();
+    }
 
 CompetitiveSimulator::~CompetitiveSimulator() {
     lock_guard<mutex> lock(handlesMutex_);
@@ -85,7 +88,7 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
     auto& registrar = GameManagerRegistrar::getGameManagerRegistrar();
     registrar.createEntry(soName);
 
-    gameManagerHandle_ = dlopen(absPath.c_str(), RTLD_LAZY);
+    gameManagerHandle_ = dlopen(absPath.c_str(), RTLD_LAZY | RTLD_NODELETE);
     if (!gameManagerHandle_) {
         std::cerr << "dlopen failed: " << absPath << ": " << dlerror() << std::endl;
         registrar.removeLast();
@@ -170,31 +173,34 @@ bool CompetitiveSimulator::loadMaps(const string& folder, vector<fs::path>& outM
  *
  * @param maps List of map file paths to use in scheduling games.
  */
-void CompetitiveSimulator::scheduleGames(const vector<fs::path>& maps) {
-    vector<string> algoNames;
+void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
+    // Collect algorithm names once (single-threaded setup, no locks needed)
+    std::vector<std::string> algoNames;
+    algoNames.reserve(algoNameToPath_.size());
+    for (const auto& [name, _] : algoNameToPath_) algoNames.push_back(name);
 
-    {
-        lock_guard<mutex> lock(handlesMutex_);
-        for (const auto& [name, _] : algoNameToPath_) {
-            algoNames.push_back(name);
-        }
-    }
+    const size_t N = algoNames.size();
+    const size_t R = (N > 1) ? (N - 1) : 0;
 
-    size_t N = algoNames.size();
     for (size_t k = 0; k < maps.size(); ++k) {
-        // Skip duplicated round if N is even and k == N / 2 - 1
-        if (N % 2 == 0 && k == N / 2 - 1) {
-            continue;
-        }
+        const size_t r = (N > 1) ? (k % R) : 0;
+        const bool evenN_middle_round = (N % 2 == 0) && (r == N/2 - 1);
 
+        // Iterate unique pairs once
         for (size_t i = 0; i < N; ++i) {
-            size_t j = (i + 1 + k % (N - 1)) % N;
-            if (i < j) {
-                scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
+            size_t j = (i + 1 + r) % N;
+            if (i >= j) continue; // ensure each unordered pair once
 
-                lock_guard<mutex> lock(handlesMutex_);
-                algoUsageCounts_[algoNames[i]]++;
-                algoUsageCounts_[algoNames[j]]++;
+            // Game 1: i vs j
+            scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
+            ++algoUsageCounts_[algoNames[i]];
+            ++algoUsageCounts_[algoNames[j]];
+
+            // Game 2 (mirrored): j vs i, except the even-N middle round
+            if (!evenN_middle_round) {
+                scheduledGames_.push_back({maps[k], algoNames[j], algoNames[i]});
+                ++algoUsageCounts_[algoNames[i]];
+                ++algoUsageCounts_[algoNames[j]];
             }
         }
     }
@@ -225,12 +231,11 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
     const std::string& soPath = it->second;
     if (algoPathToHandle_.count(soPath)) return;
 
-    auto& registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
-    registrar.createAlgorithmFactoryEntry(name);
+    algoRegistrar_->createAlgorithmFactoryEntry(name);
 
-    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
+    void* handle = dlopen(soPath.c_str(), RTLD_LAZY | RTLD_NODELETE);
     if (!handle) {
-        registrar.removeLast();
+        algoRegistrar_->removeLast();
         std::lock_guard<std::mutex> errLock(stderrMutex_);
         throw std::runtime_error(std::string("Failed to load algorithm ") + soPath + ": " + dlerror());
     }
@@ -238,15 +243,15 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
     algoPathToHandle_[soPath] = handle;
 
     try {
-        registrar.validateLastRegistration();
+        algoRegistrar_->validateLastRegistration();
         algorithms_.push_back(make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(
-            registrar.end()[-1]));
+            algoRegistrar_->end()[-1]));
     } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
         {
             lock_guard<mutex> errLock(stderrMutex_);
             cerr << "Bad registration in " << name << ": " << e.name << endl;
         }
-        registrar.removeLast();
+        algoRegistrar_->removeLast();
         dlclose(handle);
         algoPathToHandle_.erase(soPath);
         algoNameToPath_.erase(name);
@@ -269,11 +274,10 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
  * @return Shared pointer to the algorithm factories, or nullptr on failure.
  */
 shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> CompetitiveSimulator::getValidatedAlgorithm(const string& name) {
+    lock_guard<mutex> lock(handlesMutex_);
     for (const auto& algo : algorithms_) {
         if (algo->name() == name) {
-            if (!algo->hasPlayerFactory() || !algo->hasTankAlgorithmFactory()) {
-                return nullptr;
-            }
+            if (!algo->hasPlayerFactory() || !algo->hasTankAlgorithmFactory()) return nullptr;
             return algo;
         }
     }
@@ -286,24 +290,6 @@ shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> CompetitiveSimulator
  * Creates multiple worker threads (up to the user-specified maximum) that process the game queue concurrently.
  */
 void CompetitiveSimulator::runGames() {
-    mutex queueMutex;
-    size_t nextTask = 0;
-    vector<thread> workers;
-
-    // Worker workflow
-    auto worker = [&]() {
-        while (true) {
-            GameTask task;
-            {
-                // Make sure each game is safely grabbed by a single thread
-                lock_guard<mutex> lock(queueMutex);
-                if (nextTask >= scheduledGames_.size()) return;
-                task = scheduledGames_[nextTask++];
-            }
-            runSingleGame(task); // Runs the scheduled game
-        }
-    };
-
     size_t threadCount = min(numThreads_, scheduledGames_.size());
     if (threadCount == 1) { // Main thread runs all games sequentially
         for (const auto& task : scheduledGames_) {
@@ -311,11 +297,24 @@ void CompetitiveSimulator::runGames() {
         }
         return;
     }
-    else { // Create a thread pool with the specified number of threads
-        for (size_t i = 0; i < threadCount; ++i) {
-                workers.emplace_back(worker);
-            }
-    }
+
+    std::atomic<size_t> nextTask{0};
+    std::vector<std::thread> workers;
+    workers.reserve(threadCount);
+    
+    // Worker workflow
+    auto worker = [&]() {
+        while (true) {
+            size_t idx = nextTask.fetch_add(1, std::memory_order_relaxed);
+            if (idx >= scheduledGames_.size()) break;
+            runSingleGame(scheduledGames_[idx]);
+        }
+    };
+
+    for (size_t i = 0; i < threadCount; ++i) {
+            workers.emplace_back(worker);
+        }
+    
     
     // Wait for all threads to finish working
     for (auto& t : workers) {
@@ -338,8 +337,6 @@ void CompetitiveSimulator::runGames() {
  * @param task Game configuration including map path and participating algorithms.
  */
 void CompetitiveSimulator::runSingleGame(const GameTask& task) {
-    auto gm = createGameManager();
-
     fs::path mapPath = task.mapPath;
     MapData mapData = readMap(mapPath);
     if (mapData.failedInit) {
@@ -361,35 +358,38 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         return;
     }
 
-    // Get the corresponding AlgorithmAndPlayerFactories
-    auto algo1 = getValidatedAlgorithm(name1);
-    auto algo2 = getValidatedAlgorithm(name2);
-    if (!algo1 || !algo2) {
-        lock_guard<mutex> lock(stderrMutex_);
-        cerr << "Error: Missing factories for one of the algorithms while running map: " << mapPath << "\n"
-              << "Algorithms: " << name1 << " vs. " << name2 << endl;
-        return;
-    }
+    {
+        // Get the corresponding AlgorithmAndPlayerFactories
+        auto algo1 = getValidatedAlgorithm(name1);
+        auto algo2 = getValidatedAlgorithm(name2);
+        if (!algo1 || !algo2) {
+            lock_guard<mutex> lock(stderrMutex_);
+            cerr << "Error: Missing factories for one of the algorithms while running map: " << mapPath << "\n"
+                << "Algorithms: " << name1 << " vs. " << name2 << endl;
+            return;
+        }
 
-    // Create players
-    auto player1 = algo1->createPlayer(1, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
-    auto player2 = algo2->createPlayer(2, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
+        // Create players
+        auto player1 = algo1->createPlayer(1, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
+        auto player2 = algo2->createPlayer(2, mapData.cols, mapData.rows, mapData.maxSteps, mapData.numShells);
 
+        // Run game manager with players and factories
+        auto gm = createGameManager();
+        GameResult result = gm->run(mapData.cols, mapData.rows, *mapData.satelliteView, mapData.name,
+            mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
+            algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
+        );
+        
 
-    // Run game manager with players and factories
-    GameResult result = gm->run(mapData.cols, mapData.rows, *mapData.satelliteView, mapData.name,
-        mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
-        algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
-    );
-
-    // Use GameResult to update scores
-    bool tie = result.winner == 0;
-    if (tie) {
-        updateScore(name1, name2, true);
-    } else if (result.winner == 1) {
-        updateScore(name1, name2, false);
-    } else {
-        updateScore(name2, name1, false);
+        // Use GameResult to update scores
+        bool tie = result.winner == 0;
+        if (tie) {
+            updateScore(name1, name2, true);
+        } else if (result.winner == 1) {
+            updateScore(name1, name2, false);
+        } else {
+            updateScore(name2, name1, false);
+        }
     }
 
     decreaseUsageCount(name1);
@@ -457,21 +457,33 @@ unique_ptr<AbstractGameManager> CompetitiveSimulator::createGameManager() {
  *
  * @param algoName Name of the algorithm whose usage count should be decreased.
  */
-void CompetitiveSimulator::decreaseUsageCount(const string& algoName) {
-    lock_guard<mutex> lock(handlesMutex_);
+void CompetitiveSimulator::decreaseUsageCount(const std::string& algoName) {
+    std::lock_guard<std::mutex> lock(handlesMutex_);
+
     auto it = algoUsageCounts_.find(algoName);
     if (it == algoUsageCounts_.end()) return;
+    if (--(it->second) != 0) return;
 
-    if (--(it->second) == 0) {
-        const string& soPath = algoNameToPath_[algoName];
+    const auto pathIt = algoNameToPath_.find(algoName);
+    if (pathIt == algoNameToPath_.end()) { algoUsageCounts_.erase(it); return; }
+    const std::string soPath = pathIt->second;
 
-        auto handleIt = algoPathToHandle_.find(soPath);
-        if (handleIt != algoPathToHandle_.end()) {
-            dlclose(handleIt->second);
-            algoPathToHandle_.erase(handleIt);
-        }
+    // 1) Drop all wrappers/factories first (kills std::functions/vtables to plugin code)
+    algorithms_.erase(std::remove_if(algorithms_.begin(), algorithms_.end(),
+                                     [&](const auto& a){ return a->name() == algoName; }),
+                      algorithms_.end());
 
-        algoNameToPath_.erase(algoName);
-        algoUsageCounts_.erase(it);
+    // 2) Unregister (may destroy more function objects)
+    algoRegistrar_->eraseByName(algoName);
+
+    // 3) Now it's safe to unload code
+    if (auto h = algoPathToHandle_.find(soPath); h != algoPathToHandle_.end()) {
+        if (verbose_) std::cerr << "[unload] " << algoName << " (" << soPath << ")\n";  // DEBBUG
+        dlclose(h->second);
+        algoPathToHandle_.erase(h);
     }
+
+    // 4) Remove lookup metadata so nobody can re-find a dead plugin
+    algoNameToPath_.erase(pathIt);
+    algoUsageCounts_.erase(it);
 }
