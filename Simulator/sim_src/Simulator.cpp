@@ -110,39 +110,52 @@ bool Simulator::extractValues(Simulator::MapData &mapData, ifstream& file, ofstr
 tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, ifstream &file,
     Simulator::MapData &mapData, ofstream &inputErrors) {
 
+    bool hasErrors = false;
     int i = 0, extraRows = 0, extraCols = 0;
     string line;
-    bool hasErrors = false;
 
-    // Read the rest of the file
+    // Ensure size & prefill with spaces (in case caller didn't)
+    if ((int)gameBoard.size() != mapData.rows ||
+        gameBoard.empty() || (int)gameBoard[0].size() != mapData.cols) {
+        gameBoard.assign(mapData.rows, vector<char>(mapData.cols, ' '));
+    } else {
+        for (auto& row : gameBoard) fill(row.begin(), row.end(), ' ');
+    }
+
+    auto allowed = [](char c) {
+        return c == '#' || c == '@' || c == ' ' || c == '1' || c == '2';
+    };
+
     while (getline(file, line)) {
-        if (i >= mapData.rows) { // Check if we have reached the end of the file
+        // Strip CR if the file uses Windows endings
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+
+        if (i >= mapData.rows) {
             ++extraRows;
+            hasErrors = true;
             continue;
         }
 
-        // Check if line has more characters than expected width
-        if (static_cast<int>(line.size()) > mapData.cols) {
-            extraCols += static_cast<int>(line.size()) - mapData.cols;
-            inputErrors << "Error recovered from: Extra " << (static_cast<int>(line.size()) - mapData.cols) <<
-                " columns at row " << i << " ignored.\n";
+        if ((int)line.size() > mapData.cols) {
+            int over = (int)line.size() - mapData.cols;
+            extraCols += over;
+            inputErrors << "Error recovered from: Extra " << over
+                        << " columns at row " << i << " ignored.\n";
             hasErrors = true;
         }
 
-        // Truncate the line to fit the declared width
-        line = line.substr(0, mapData.cols);
-
-        for (int j = 0; j < mapData.cols; ++j) { // Iterate through each cell in the line
-            char cell = (j < static_cast<int>(line.size())) ? line[j] : ' ';  // Fill missing columns with spaces
-            gameBoard[i][j] = cell; // Update the gameboard with the new cell
-
-            if (cell != '#' && cell != '@' && cell != ' ') { // Unknown character
-                inputErrors << "Error recovered from: Unknown character '" << cell << "' at row " << i << ", column " << j << ". Treated as space.\n";
+        for (int j = 0; j < mapData.cols; ++j) {
+            char cell = (j < (int)line.size()) ? line[j] : ' ';
+            if (!allowed(cell)) {
+                inputErrors << "Error recovered from: Unknown character '"
+                            << (cell == '\r' ? '\\' : cell)
+                            << "' at row " << i << ", column " << j
+                            << ". Treated as space.\n";
                 cell = ' ';
                 hasErrors = true;
             }
+            gameBoard[i][j] = cell; // assign AFTER validation
         }
-
         ++i;
     }
 
@@ -183,6 +196,7 @@ bool Simulator::checkForExtras(int extraRows, int extraCols, ofstream &inputErro
 Simulator::MapData Simulator::readMap(const std::string& file_path) {
     int extraRows = 0, extraCols = 0;
     MapData mapData;
+    mapData.failedInit = false; // Reset failedInit flag
     string line;
 
     // input_error.txt initialisation
@@ -203,7 +217,7 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
     vector<vector<char>> gameBoard;
     gameBoard.resize(mapData.rows, vector<char>(mapData.cols, ' '));
     tie(has_errors, extraRows, extraCols) = fillGameBoard(gameBoard, file, mapData, input_errors);
-    mapData.satelliteView = std::make_unique<ExtSatelliteView>(mapData.rows, mapData.cols, gameBoard);
+    mapData.satelliteView = std::make_unique<ExtSatelliteView>(mapData.cols, mapData.rows, gameBoard);
 
     has_errors = has_errors ? has_errors : checkForExtras(extraRows, extraCols, input_errors);
 

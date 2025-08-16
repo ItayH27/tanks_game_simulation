@@ -30,11 +30,10 @@ private:
     vector<void*> handles_;
     MapData mapData_ = {};
 
-
     // void* algorithmHandle1_ = nullptr;
     // void* algorithmHandle2_ = nullptr;
 
-    AlgorithmRegistrar algo_registrar;
+    AlgorithmRegistrar* algo_registrar;
     GameManagerRegistrar game_manager_registrar;
 
     // AlgorithmRegistrar::AlgorithmAndPlayerFactories algorithmFactory1_;

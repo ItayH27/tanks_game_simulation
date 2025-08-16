@@ -38,6 +38,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ------- Added for debugging -------
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # tooling (VS Code/clangd)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) # ensure -fPIC everywhere
+# ------- End of debugging additions -------
+
 # ---- Sources (your layout) ----
 file(GLOB_RECURSE ALGO_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/Algo_src/*.cpp
@@ -68,9 +73,30 @@ target_include_directories(${TARGET_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/../common
         ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include)
 
+# Link against your shared UserCommon lib
+target_link_libraries(${TARGET_NAME} PRIVATE usercommon)
+
+# Make sure the plugin can find libusercommon.so at runtime
+# (we'll place the .so next to the plugin)
+set_target_properties(${TARGET_NAME} PROPERTIES
+  BUILD_RPATH "\$ORIGIN"
+  INSTALL_RPATH "\$ORIGIN"
+)
+
+# After building the plugin, copy libusercommon.so next to it
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:usercommon>
+          $<TARGET_FILE_DIR:${TARGET_NAME}>
+)
+
+
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-,
+    # ------- Added for debugging -------
+    $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
+    # ------- End of debugging additions -------
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()

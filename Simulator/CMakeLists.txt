@@ -29,31 +29,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ------- Added for debugging purposes -------
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# --------------------------------------
+
 # Detect if this dir is the top-level (so we can set local output dirs only then)
 set(TOP_LEVEL OFF)
 if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     set(TOP_LEVEL ON)
 endif()
-
-# --------------------------------------
-# UserCommon: build once as a static lib
-# --------------------------------------
-# All your shared sources live under ../UserCommon/UC_src
-file(GLOB UC_SOURCES CONFIGURE_DEPENDS
-        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_src/*.cpp)
-
-if(UC_SOURCES STREQUAL "")
-    message(FATAL_ERROR "No sources under UserCommon/UC_src")
-endif()
-
-add_library(usercommon STATIC ${UC_SOURCES})
-target_include_directories(usercommon PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include
-        ${CMAKE_CURRENT_LIST_DIR}/../common
-)
-
-# For shared linking scenarios elsewhere, PIC is nice to have even on static libs
-set_target_properties(usercommon PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --------------------------------------
 # Simulator executable and sources
@@ -71,7 +56,13 @@ endif()
 set(TARGET_NAME simulator_${SUBMITTER_IDS})
 add_executable(${TARGET_NAME} ${SIM_SOURCES})
 
+# Export symbols from the simulator so plugins can resolve registration ctors
 set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS ON)
+target_link_options(${TARGET_NAME} PRIVATE -Wl,-E)   # aka --export-dynamic
+
+# ------- Added for debugging purposes -------
+# target_link_options(${TARGET_NAME} PRIVATE -Wl,--export-dynamic) 
+# --------------------------------------------
 
 # Exact output name required by the assignment: simulator_<ids>
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -89,7 +80,12 @@ target_include_directories(${TARGET_NAME}
 
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    # target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    # ------- Added for debugging purposes -------
+    target_compile_options(${TARGET_NAME} PRIVATE
+        $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>) 
+    # --------------------------------------------
+
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()

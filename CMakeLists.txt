@@ -37,6 +37,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Assignment requires naming all artifacts with both submitter IDs.
 set(SUBMITTER_IDS "209277367_322542887" CACHE STRING "Submitter IDs" FORCE)
 
@@ -45,12 +48,19 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+option(ENABLE_ASAN "Enable AddressSanitizer" ON)
+if(ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer -O1 -g)
+  add_link_options(-fsanitize=address)
+endif()
+
 # -------------------------
 # Subprojects (each has its own CMakeLists.txt)
 # -------------------------
 add_subdirectory(GameManager)  # builds GameManager_<ids>.so
 add_subdirectory(Algorithm)    # builds Algorithm_<ids>.so
 add_subdirectory(Simulator)    # builds simulator_<ids> (with main)
+add_subdirectory(UserCommon)
 
 set_target_properties(simulator_${SUBMITTER_IDS} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}

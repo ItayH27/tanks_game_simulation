@@ -41,6 +41,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ------- Added for debugging -------
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # ADD
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) # ADD
+# ------------------------------------
+
 # -------------------------
 # Sources & headers (your layout)
 # -------------------------
@@ -54,21 +59,10 @@ if(GM_SOURCES STREQUAL "")
 endif()
 
 set(TARGET_NAME GameManager_${SUBMITTER_IDS})
-add_library(${TARGET_NAME} SHARED ${GM_SOURCES}
-        ../UserCommon/UC_src/ExtSatelliteView.cpp)
-
-# Pull in your shared implementations so their vtables live inside the GM .so
-file(GLOB USERCOMMON_SOURCES CONFIGURE_DEPENDS
-        ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_src/*.cpp
-)
-
-if(USERCOMMON_SOURCES STREQUAL "")
-    message(FATAL_ERROR "No sources under ../UserCommon/UC_src")
-endif()
-
-# We already expose headers via target_include_directories (kept as‑is)
-# Compile the implementations into the GM .so:
-target_sources(${TARGET_NAME} PRIVATE ${USERCOMMON_SOURCES})
+add_library(${TARGET_NAME} SHARED ${GM_SOURCES})
+        # ------- Removed for debugging - maybe should be removed in general -------
+       # ../UserCommon/UC_src/ExtSatelliteView.cpp)
+        # -------------------------
 
 # Exact filename required by the assignment (no 'lib' prefix on Linux)
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -87,9 +81,28 @@ target_include_directories(${TARGET_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/../common
         ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include)
 
+# Link against your shared UserCommon lib
+target_link_libraries(${TARGET_NAME} PRIVATE usercommon)
+
+# Ensure the plugin can find libusercommon.so at runtime
+set_target_properties(${TARGET_NAME} PROPERTIES
+  BUILD_RPATH "\$ORIGIN"
+  INSTALL_RPATH "\$ORIGIN"
+)
+
+# After building the plugin, copy libusercommon.so next to it
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:usercommon>
+          $<TARGET_FILE_DIR:${TARGET_NAME}>
+)
+
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
+    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-, 
+    # -------- Added for debugging -------
+    $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
+    # --------------------------------------
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
