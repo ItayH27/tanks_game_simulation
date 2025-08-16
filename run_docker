@@ -86,6 +86,9 @@ tasks:
 launch:
 {
     "version": "0.2.0",
+    "env": {
+        "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1:abort_on_error=1:fast_unwind_on_malloc=0"
+        },
     "configurations": [
         {
             "name": "Debug Comparative",
@@ -100,6 +103,7 @@ launch:
                 "algorithm2=1_algo_so/Algorithm_209277367_322542888.so",
                 "-verbose"
             ],
+            
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/tanks_game_simulation",
             "environment": [],
@@ -122,7 +126,7 @@ launch:
             "args": [
                 "-competition",
                 "game_maps_folder=1_maps",
-                "game_manager=1_gm_so/GameManager_new_209277367_322542887.so",
+                "game_manager=1_gm_so/GameManager_test_209277367_322542887.so",
                 "algorithms_folder=1_algo_so",
                 "-verbose"
             ],
@@ -139,11 +143,15 @@ launch:
                 }
             ],
             "preLaunchTask": "CMake: build all"
+    
         }
     ]
 }
 
+
 VSCode build:
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
+(cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON)
 cmake --build build
+(ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 LSAN_OPTIONS=verbosity=1:log_threads=1 ./simulator_209277367_322542887 -competition   game_maps_folder=1_maps   game_manager=1_gm_so/GameManager_test_209277367_322542887.so   algorithms_folder=1_algo_so   -verbose))
 
