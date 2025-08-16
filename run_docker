@@ -1,0 +1,157 @@
+docker run -it --rm \
+    -v $(pwd):/workspace \
+    tanks-ubuntu2204:latest \
+    /bin/bash
+
+cmake -S . -B build && cmake --build build -j
+
+./simulator_209277367_322542887 -comparative game_map=1_maps \
+  game_managers_folder=game_managers_bin \
+  algorithm1=algorithms_bin/Algorithm_209277367_322542887.so \
+  algorithm2=algorithms_bin/Algorithm_209277367_322542887.so \
+  num_threads=4 -verbose
+
+./simulator_209277367_322542887 -competition \
+    game_maps_folder=1_maps \
+    game_manager=1_gm_so/GameManager_209277367_322542887.so \
+    algorithms_folder=1_algo_so \
+    num_threads=4 -verbose
+
+VSCode json files:
+tasks:
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: build all",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/tanks_game_simulation/build",
+                "--target",
+                "build_all",
+                "--config",
+                "Debug"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Comparative",
+            "type": "shell",
+            "dependsOn": ["CMake: build all"],
+            "command": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-comparative",
+                "game_map=1_maps/valid_map.txt",
+                "game_managers_folder=1_gm_so",
+                "algorithm1=1_algo_so/Algorithm_209277367_322542887.so",
+                "algorithm2=1_algo_so/Algorithm_209277367_322542888.so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Competition",
+            "type": "shell",
+            "dependsOn": ["CMake: build all"],
+            "command": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-competition",
+                "game_maps_folder=1_maps",
+                "game_manager=1_gm_so/GameManager_209277367_322542887.so",
+                "algorithms_folder=1_algo_so",
+                "num_threads=4",
+                "-verbose"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}
+
+launch:
+{
+    "version": "0.2.0",
+    "env": {
+        "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1:abort_on_error=1:fast_unwind_on_malloc=0"
+        },
+    "configurations": [
+        {
+            "name": "Debug Comparative",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-comparative",
+                "game_map=1_maps/valid_input_complex.txt",
+                "game_managers_folder=1_gm_so",
+                "algorithm1=1_algo_so/Algorithm_209277367_322542887.so",
+                "algorithm2=1_algo_so/Algorithm_209277367_322542888.so",
+                "-verbose"
+            ],
+            
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/tanks_game_simulation",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: build all"
+        },
+        {
+            "name": "Debug Competition",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/tanks_game_simulation/simulator_209277367_322542887",
+            "args": [
+                "-competition",
+                "game_maps_folder=1_maps",
+                "game_manager=1_gm_so/GameManager_test_209277367_322542887.so",
+                "algorithms_folder=1_algo_so",
+                "-verbose"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/tanks_game_simulation",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: build all"
+    
+        }
+    ]
+}
+
+
+VSCode build:
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+(cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON)
+cmake --build build
+(ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 LSAN_OPTIONS=verbosity=1:log_threads=1 ./simulator_209277367_322542887 -competition   game_maps_folder=1_maps   game_manager=1_gm_so/GameManager_test_209277367_322542887.so   algorithms_folder=1_algo_so   -verbose))
+
