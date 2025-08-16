@@ -35,8 +35,31 @@ ComparativeSimulator::~ComparativeSimulator() {
     }
     algoHandles_.clear();
 }
+/**
+ * @brief Runs the competitive simulation using the provided folders and GameManager.
+ *
+ * Loads the GameManager and all algorithm `.so` files, loads map files, schedules and runs games
+ * according to the assignment's round-robin pairing scheme, and writes the results to an output file.
+ *
+ * @param mapsFolder Path to the folder containing game map files.
+ * @param gameManagerSoPath Path to the compiled GameManager `.so` file.
+ * @param algorithmsFolder Path to the folder containing compiled algorithm `.so` files.
+ * @return int 0 on success, 1 on error.
+ */
 
-
+/**
+ * @brief Runs a comparative simulation between multiple game managers.
+ *
+ * This function loads the map, dynamically loads the algorithm shared objects,
+ * verifies the required factories, initializes the game managers, and runs the
+ * simulation. The results are then written to an output file.
+ *
+ * @param mapPath Path to the input map file.
+ * @param gmFolder Path to the folder containing GameManager shared libraries.
+ * @param algorithmSoPath1 Path to the first algorithm `.so` file.
+ * @param algorithmSoPath2 Path to the second algorithm `.so` file.
+ * @return int 0 if the simulation runs successfully, non-zero error code otherwise.
+ */
 int ComparativeSimulator::run(const string& mapPath,
                               const string& gmFolder,
                               const string& algorithmSoPath1,
@@ -70,7 +93,15 @@ int ComparativeSimulator::run(const string& mapPath,
     return 0;
 }
 
-
+/**
+ * @brief Dynamically loads an Algorithm shared object (.so) file.
+ *
+ * This function registers a new Algorithm object from the given shared object,
+ * attempts to load it using `dlopen`, and stores its handle for later use.
+ *
+ * @param path Path to the algorithm `.so` file.
+ * @return true if the shared object was successfully loaded, false otherwise.
+ */
 bool ComparativeSimulator::loadAlgoSO(const string& path) {
     algo_registrar->createAlgorithmFactoryEntry(path);
     void* handle = dlopen(path.c_str(), RTLD_LAZY);
@@ -84,10 +115,21 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
     return true;
 }
 
+/**
+ * @brief Dynamically loads a GameManager shared object (.so) file.
+ *
+ * This function registers a new GameManager object from the given shared object,
+ * attempts to load it using `dlopen`, and returns its handle. 
+ * If the load fails, an error message is printed to `stderr`.
+ *
+ * @param path Path to the GameManager `.so` file.
+ * @return A valid handle to the loaded shared object on success, or nullptr on failure.
+ */
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
     game_manager_registrar->createEntry(path);
     void* handle = dlopen(path.c_str(), RTLD_LAZY);
     if (!handle) {
+        lock_guard<mutex> lock(stderrMutex_);
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
         std::cerr << (error ? error : "Unknown error") << "\n";
@@ -98,14 +140,24 @@ void* ComparativeSimulator::loadGameManagerSO(const string& path) {
 
 
 void ComparativeSimulator::getGameManagers(const string& gameManagerFolder) {
-    for (const auto& entry : directory_iterator(gameManagerFolder)) {
+    for (const auto& entry : directory_iterator(gameManagerFolder)) { // Check each entry in the directory
         if (entry.path().extension() == ".so") { // We care only about .so files
-            gms_paths_.push_back(entry.path());
+            gms_paths_.push_back(entry.path()); // Store the path of the GameManager .so file
         }
     }
 }
 
-
+/**
+ * @brief Executes all scheduled games using available GameManager shared objects.
+ *
+ * This function distributes the execution of games across multiple threads.
+ * - If only one thread is available, all games are executed sequentially on the main thread.
+ * - If multiple threads are available, a thread pool is created and each worker
+ *   retrieves a GameManager path from the shared list and runs the corresponding game.
+ *
+ * @note The number of threads is limited by `numThreads_` and the number of available
+ *       GameManager paths (`gms_paths_`).
+ */
 void ComparativeSimulator::runGames() {
     size_t threadCount = std::min(numThreads_, gms_paths_.size());
     if (threadCount == 1) { // Main thread runs all games sequentially
@@ -136,12 +188,26 @@ void ComparativeSimulator::runGames() {
         workers.emplace_back(worker);
     }
 
+    // Wait for all threads to finish working
     for (auto& t : workers) {
         t.join();
     }
 }
 
-
+/**
+ * @brief Executes a single game using a specified GameManager shared object.
+ *
+ * This function dynamically loads a GameManager from the given `.so` file, 
+ * retrieves its factory, and initializes a new GameManager instance. It then 
+ * creates two players and their corresponding tank algorithm factories from the 
+ * registered algorithms. The game is executed with these players, and the 
+ * result is stored in `allResults`.
+ *
+ * After execution, the GameManager entry is removed from the registrar and the
+ * shared object handle is closed.
+ *
+ * @param gmPath Path to the GameManager `.so` file to load and execute.
+ */
 void ComparativeSimulator::runSingleGame(const path& gmPath) {
     // load .so file for Game Manager
     void* gm_handle = loadGameManagerSO(gmPath);
@@ -152,34 +218,36 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         // Get the GameManager factory and name from the registrar
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
         if (!gm.hasFactory()){
+            lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: GameManager factory not found for: " << gm.name() << std::endl;
             dlclose(gm_handle); // Close the GameManager shared object handle
             return;
         }
 
-        // game_manager_registrar->removeLast();
+        // Create the GameManager instance
         unique_ptr<AbstractGameManager> gameManager = gm.create(verbose_);
         if (!gameManager) {
+            lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
             return;
         }
         auto gm_name = gm.name();
 
+        // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         unique_ptr<Player> player2 = algo1_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         if (!player1 || !player2) {
+            lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to create players from algorithms." << std::endl;
             return;
         }
-
+        // Get algorithm names and factories
         string name1 = algo1_->name();
         string name2 = algo2_->name();
-
         TankAlgorithmFactory tankAlgorithmFactory1 = algo1_->getTankAlgorithmFactory();
         TankAlgorithmFactory tankAlgorithmFactory2 = algo2_->getTankAlgorithmFactory();
 
         // Run game manager with players and factories
-        
         GameResult result = gameManager->run(
             mapData_.cols, mapData_.rows,
             *mapData_.satelliteView, mapData_.name,
@@ -187,14 +255,25 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             *player1, name1, *player2, name2,
             tankAlgorithmFactory1, tankAlgorithmFactory2);
 
+        // Store the result in allResults
         allResults.emplace_back(std::move(result), gm_name);
     }
 
+    // Remove the GameManager entry from the registrar and close the handle
     game_manager_registrar->removeLast();
     dlclose(gm_handle); // Close the GameManager shared object handle
 }
 
-
+/**
+ * @brief Compares two GameResult objects to check if they are identical.
+ *
+ * Two results are considered the same if they have identical winners, reasons,
+ * rounds, and identical final map states (compared cell by cell).
+ *
+ * @param a First GameResult to compare.
+ * @param b Second GameResult to compare.
+ * @return true if both results are identical, false otherwise.
+ */
 bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) const {
     // Check if the winners, reasons, and rounds are the same
     if (a.winner != b.winner || a.reason != b.reason || a.rounds != b.rounds) {
@@ -214,7 +293,13 @@ bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) 
     return true;
 }
 
-
+/**
+ * @brief Groups game results that are equivalent.
+ *
+ * Iterates over the results and clusters them into groups.
+ *
+ * @param results Vector of game results paired with their GameManager names.
+ */
 void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results) {
     for (auto& result : results) {
         bool placed = false;
@@ -232,7 +317,18 @@ void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results)
     }
 }
 
-
+/**
+ * @brief Writes the comparative simulation results to an output file.
+ *
+ * Groups the results, sorts them by frequency, builds an output buffer, and
+ * writes it to a file in the given folder. If the file cannot be opened,
+ * the output buffer is printed to stdout instead.
+ *
+ * @param mapPath Path to the input map file.
+ * @param algorithmSoPath1 Path to the first algorithm `.so` file.
+ * @param algorithmSoPath2 Path to the second algorithm `.so` file.
+ * @param gmFolder Output folder where results will be saved.
+ */
 void ComparativeSimulator::writeOutput(const string& mapPath,
                      const string& algorithmSoPath1,
                      const string& algorithmSoPath2,
