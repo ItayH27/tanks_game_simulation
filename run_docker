@@ -6,9 +6,9 @@ docker run -it --rm \
 cmake -S . -B build && cmake --build build -j
 
 ./simulator_209277367_322542887 -comparative game_map=1_maps \
-  game_managers_folder=game_managers_bin \
-  algorithm1=algorithms_bin/Algorithm_209277367_322542887.so \
-  algorithm2=algorithms_bin/Algorithm_209277367_322542887.so \
+  game_managers_folder=1_gm_so \
+  algorithm1=1_algo_so/Algorithm_209277367_322542887.so \
+  algorithm2=1_algo_so/Algorithm_209277367_322542888.so \
   num_threads=4 -verbose
 
 ./simulator_209277367_322542887 -competition \
