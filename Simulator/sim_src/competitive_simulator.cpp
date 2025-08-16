@@ -128,7 +128,7 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
  * @return true if at least one algorithm was successfully loaded, false otherwise.
  */
 bool CompetitiveSimulator::getAlgorithms(const string& folder) {
-    bool foundAny = false;
+    size_t soFound = 0;
 
     for (const auto& entry : fs::directory_iterator(folder)) {
         if (entry.path().extension() == ".so") {
@@ -142,11 +142,11 @@ bool CompetitiveSimulator::getAlgorithms(const string& folder) {
                 algoUsageCounts_[name] = 0;
             }
 
-            foundAny = true;
+            ++soFound;
         }
     }
 
-    return foundAny;
+    return soFound >= 2; // At least two algorithms are required
 }
 
 /**
@@ -174,29 +174,27 @@ bool CompetitiveSimulator::loadMaps(const string& folder, vector<fs::path>& outM
  * @param maps List of map file paths to use in scheduling games.
  */
 void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
-    // Collect algorithm names once (single-threaded setup, no locks needed)
     std::vector<std::string> algoNames;
     algoNames.reserve(algoNameToPath_.size());
     for (const auto& [name, _] : algoNameToPath_) algoNames.push_back(name);
 
     const size_t N = algoNames.size();
-    const size_t R = (N > 1) ? (N - 1) : 0;
+    const size_t R = N - 1;
 
     for (size_t k = 0; k < maps.size(); ++k) {
-        const size_t r = (N > 1) ? (k % R) : 0;
+        const size_t r = k % R;
         const bool evenN_middle_round = (N % 2 == 0) && (r == N/2 - 1);
 
-        // Iterate unique pairs once
         for (size_t i = 0; i < N; ++i) {
             size_t j = (i + 1 + r) % N;
-            if (i >= j) continue; // ensure each unordered pair once
+            if (i >= j) continue; // avoid duplicate unordered pairs
 
-            // Game 1: i vs j
+            // Always schedule i vs j
             scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
             ++algoUsageCounts_[algoNames[i]];
             ++algoUsageCounts_[algoNames[j]];
 
-            // Game 2 (mirrored): j vs i, except the even-N middle round
+            // Add mirror game unless it's the symmetric round
             if (!evenN_middle_round) {
                 scheduledGames_.push_back({maps[k], algoNames[j], algoNames[i]});
                 ++algoUsageCounts_[algoNames[i]];
@@ -315,7 +313,6 @@ void CompetitiveSimulator::runGames() {
             workers.emplace_back(worker);
         }
     
-    
     // Wait for all threads to finish working
     for (auto& t : workers) {
         t.join();
@@ -424,23 +421,21 @@ void CompetitiveSimulator::updateScore(const string& winner, const string& loser
  * @param mapFolder Path to the folder containing map files.
  * @param gmSoPath Path to the GameManager shared library used in the simulation.
  */
-void CompetitiveSimulator::writeOutput(const string& outFolder, const string& mapFolder, const string& gmSoPath) {
+void CompetitiveSimulator::writeOutput(const string& outFolder,
+                                       const string& mapFolder,
+                                       const string& gmSoPath) {
     ofstream out(outFolder + "/competition_" + timestamp() + ".txt");
+    std::ostream& dest = out ? static_cast<std::ostream&>(out) : static_cast<std::ostream&>(cout);
     if (!out) {
         cerr << "Failed to open output file, printing to stdout instead." << endl;
-        out.copyfmt(cout); out.clear(cout.rdstate());
     }
-    out << "game_maps_folder=" << mapFolder << "\n";
-    out << "game_manager=" << fs::path(gmSoPath).filename().string() << "\n\n";
 
-    vector<pair<string, int>> sortedScores(scores_.begin(), scores_.end());
-    sort(sortedScores.begin(), sortedScores.end(), [](const auto& a, const auto& b) {
-        return b.second < a.second;
-    });
+    dest << "game_maps_folder=" << mapFolder << "\n";
+    dest << "game_manager=" << fs::path(gmSoPath).filename().string() << "\n\n";
 
-    for (const auto& [name, score] : sortedScores) {
-        out << name << " " << score << "\n";
-    }
+    vector<pair<string,int>> sorted(scores_.begin(), scores_.end());
+    sort(sorted.begin(), sorted.end(), [](auto& a, auto& b){ return b.second < a.second; });
+    for (auto& [name, score] : sorted) dest << name << " " << score << "\n";
 }
 
 /**
@@ -468,22 +463,17 @@ void CompetitiveSimulator::decreaseUsageCount(const std::string& algoName) {
     if (pathIt == algoNameToPath_.end()) { algoUsageCounts_.erase(it); return; }
     const std::string soPath = pathIt->second;
 
-    // 1) Drop all wrappers/factories first (kills std::functions/vtables to plugin code)
     algorithms_.erase(std::remove_if(algorithms_.begin(), algorithms_.end(),
                                      [&](const auto& a){ return a->name() == algoName; }),
                       algorithms_.end());
 
-    // 2) Unregister (may destroy more function objects)
     algoRegistrar_->eraseByName(algoName);
 
-    // 3) Now it's safe to unload code
     if (auto h = algoPathToHandle_.find(soPath); h != algoPathToHandle_.end()) {
-        if (verbose_) std::cerr << "[unload] " << algoName << " (" << soPath << ")\n";  // DEBBUG
         dlclose(h->second);
         algoPathToHandle_.erase(h);
     }
 
-    // 4) Remove lookup metadata so nobody can re-find a dead plugin
     algoNameToPath_.erase(pathIt);
     algoUsageCounts_.erase(it);
 }

@@ -858,10 +858,16 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
         size_t max_steps, size_t num_shells, Player& player1, string name1, Player& player2, string name2,
         TankAlgorithmFactory player1_tank_algo_factory, TankAlgorithmFactory player2_tank_algo_factory) {
 
-    (void)name1, (void)name2, (void)map_name;
+    (void)name1, (void)name2;
     width_ = map_width, height_ = map_height, maxSteps_ = max_steps, numShells_ = num_shells, player1_ = &player1, player2_ = &player2;
     player1TankFactory_ = player1_tank_algo_factory;
     player2TankFactory_ = player2_tank_algo_factory;
+
+    string logName = "output_" + map_name;
+    gameLog_.open(logName, std::ios::out | std::ios::trunc);
+    if (!gameLog_.is_open()) {
+        std::cerr << "Failed to open log file: " << logName << endl;
+    }
 
     initiateGame(map); // Copy game board and initiate tanks
 
@@ -923,6 +929,8 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
 
         ++turn_; // Increment the turn counter
     }
+
+   closeVerboseLog(); // Close the verbose log if it was opened
 
     return std::move(gameResult_);
 }
@@ -1069,4 +1077,11 @@ void GM_209277367_322542887::updateGameLog() {
     }
 
     if (verbose_) gameLog_ << endl;
+}
+
+void GM_209277367_322542887::closeVerboseLog() {
+    if (verbose_ && gameLog_.is_open()) {
+        gameLog_.flush();
+        gameLog_.close();
+    }
 }

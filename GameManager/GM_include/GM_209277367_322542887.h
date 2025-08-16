@@ -113,5 +113,11 @@ namespace GameManager_209277367_322542887 {
         bool handleShellSpawnOnTank(Shell& shell, ShellIterator& it);
         bool handleShellCollision(Shell& shell, int x, int y, Direction dir, ShellIterator& it);
         void handleShellMoveToNextCell(Shell& shell, int x, int y, char next_cell, ShellIterator& it);
+        void openVerboseLog(const std::string& mapName,
+                                            const std::string& player1Name,
+                                            const std::string& player2Name,
+                                            size_t maxSteps,
+                                            size_t numShells);
+        void closeVerboseLog();
     };
 }
