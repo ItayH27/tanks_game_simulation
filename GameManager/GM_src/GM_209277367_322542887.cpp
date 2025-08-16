@@ -905,8 +905,7 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
         if (noAmmoFlag_) { // If both tanks are out of ammo
             noAmmoTimer_--; // Decrease the no ammo timer
             if (noAmmoTimer_ == 0) { // Check if the timer has reached zero
-                updateGameResult(TIE, NO_SHELLS_GAME_OVER, {numTanks1_, numTanks2_},
-                    std::move(satellite_view_), turn_);
+                updateGameResult(TIE, NO_SHELLS_GAME_OVER, {numTanks1_, numTanks2_}, gameboard_, turn_);
                 gameOver_ = true; // Set game_over to true if both tanks are out of ammo for GAME_OVER_NO_AMMO turns
             if (verbose_) gameLog_ << "Tie, both players have zero shells for " << GAME_OVER_NO_AMMO << " steps" << endl; // Print message if both tanks are out of ammo
             }
@@ -914,13 +913,13 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
 
         if (gameOver_) { // Check if the game is over
             if (gameOverStatus_ == 3) { // Both players are missing tanks
-                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, std::move(satellite_view_), turn_);
+                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, gameboard_, turn_);
                 if (verbose_) gameLog_ << "Tie, both players have zero tanks" <<  endl;
             } else if (gameOverStatus_ == 1) { // Player 1 has no tanks left
-                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, std::move(satellite_view_) ,turn_);
+                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, gameboard_ ,turn_);
                 if (verbose_) gameLog_ << "Player 2 won with " << numTanks2_ << " tanks still alive" << endl;
             } else if (gameOverStatus_ == 2) { // Player 2 has no tanks left
-                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, std::move(satellite_view_) , turn_);
+                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, gameboard_ , turn_);
                 if (verbose_) gameLog_ << "Player 1 won with " <<  numTanks1_ << " tanks still alive" << endl;
             }
 
@@ -970,11 +969,11 @@ pair<int, int> GM_209277367_322542887::nextLocation(const int x, const int y, co
  * @param rounds          Total rounds played.
  */
 void GM_209277367_322542887::updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
-    unique_ptr<SatelliteView> game_state, size_t rounds) {
+    vector<vector<char>>& game_state, size_t rounds) {
     gameResult_.winner = winner;
     gameResult_.reason = static_cast<GameResult::Reason>(reason);
     gameResult_.remaining_tanks = remaining_tanks;
-    gameResult_.gameState = std::move(game_state);
+    gameResult_.gameState = make_unique<ExtSatelliteView>(width_, height_, game_state);
     gameResult_.rounds = rounds;
 }
 

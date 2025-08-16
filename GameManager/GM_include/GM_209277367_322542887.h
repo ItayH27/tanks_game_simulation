@@ -56,7 +56,6 @@ namespace GameManager_209277367_322542887 {
     private:
         function<std::unique_ptr<TankAlgorithm>(int, int)> player1TankFactory_; // Factory for creating tank algorithms
         function<std::unique_ptr<TankAlgorithm>(int, int)> player2TankFactory_;
-        unique_ptr<SatelliteView> satellite_view_ = nullptr; // Satellite view for the game
         Player* player1_; // Player 1
         Player* player2_; // Player 2
         vector<vector<char>> gameboard_; // Game board represented as a 2D vector
@@ -106,7 +105,7 @@ namespace GameManager_209277367_322542887 {
         static string getEnumName(ActionRequest action) ;
         void updateGameLog();
         void updateGameResult(int winner, int reason, vector<size_t> remaining_tanks,
-            unique_ptr<SatelliteView> game_state, size_t rounds);
+            vector<vector<char>>& game_state, size_t rounds);
         bool initiateGame(const SatelliteView& gameBoard);
         void handleTankCollisionAt( TankInfo& tank, int old_x, int old_y, int new_x, int new_y, Direction dir, char next_cell);
         void clearPreviousShellPosition(Shell& shell);
