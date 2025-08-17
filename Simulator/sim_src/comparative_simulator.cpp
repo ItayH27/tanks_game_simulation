@@ -133,6 +133,7 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
  * @return A valid handle to the loaded shared object on success, or nullptr on failure.
  */
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
+    lock_guard<mutex> lock(gmRegistrarmutex_);
     game_manager_registrar->createEntry(path);
     void* handle = dlopen(path.c_str(), RTLD_LAZY);
     if (!handle) {
@@ -222,7 +223,12 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         return;
     }
     {
+        unique_ptr<AbstractGameManager> gameManager;
+        string gm_name;
+
+        {
         // Get the GameManager factory and name from the registrar
+        lock_guard<mutex> lock(gmRegistrarmutex_);
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
         if (!gm.hasFactory()){
             lock_guard<mutex> lock(stderrMutex_);
@@ -232,17 +238,18 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         }
 
         // Create the GameManager instance
-        unique_ptr<AbstractGameManager> gameManager = gm.create(verbose_);
+        gameManager = gm.create(verbose_);
         if (!gameManager) {
             lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
             return;
         }
-        auto gm_name = gm.name();
+        gm_name = gm.name();
+        }
 
         // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
-        unique_ptr<Player> player2 = algo1_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
+        unique_ptr<Player> player2 = algo2_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         if (!player1 || !player2) {
             lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to create players from algorithms." << std::endl;
@@ -263,7 +270,10 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             tankAlgorithmFactory1, tankAlgorithmFactory2);
 
         // Store the result in allResults
+        {
+        lock_guard<mutex> lock(stderrMutex_);
         allResults.emplace_back(std::move(result), gm_name);
+        }
     }
 
     // Remove the GameManager entry from the registrar and close the handle
@@ -396,7 +406,7 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         for (size_t i = 0; i < group.gm_names.size()-1 ; i++) {
             oss << group.gm_names[i] << ", ";
         }
-        oss << group.gm_names[group.gm_names.size() - 1] << "\n"
+        oss << group.gm_names.back() << "\n"
             << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
             << group.result.rounds << endl;
 

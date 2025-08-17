@@ -27,6 +27,8 @@ private:
 
     vector<void*> algoHandles_;
     mutex handlesMutex_;
+    mutex allResultsMutex_;
+    mutex gmRegistrarmutex_;
     MapData mapData_ = {};
 
     // void* algorithmHandle1_ = nullptr;
