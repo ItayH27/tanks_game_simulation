@@ -23,32 +23,21 @@
 # - common/UserCommon layout and auto-registration division of labor.
 #
 
+# ===================================
+# GameManager/CMakeLists.txt — plugin
+# ===================================
 cmake_minimum_required(VERSION 3.16)
 project(GameManagerProj LANGUAGES CXX)
 
-# -------------------------
-# Required: your submitter IDs
-# -------------------------
-# Usage (from GameManager dir):
-#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-#   cmake --build build --config Release
-#
-# Produces: build/GameManager_111111111_222222222.so  (Linux)
-#
 set(SUBMITTER_IDS "209277367_322542887" CACHE STRING "Submitter IDs" FORCE)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ------- Added for debugging -------
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # ADD
-set(CMAKE_POSITION_INDEPENDENT_CODE ON) # ADD
-# ------------------------------------
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# -------------------------
-# Sources & headers (your layout)
-# -------------------------
 file(GLOB_RECURSE GM_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/GM_src/*.cpp
         ${CMAKE_CURRENT_LIST_DIR}/GM_src/*.cc
@@ -60,52 +49,29 @@ endif()
 
 set(TARGET_NAME GameManager_${SUBMITTER_IDS})
 add_library(${TARGET_NAME} SHARED ${GM_SOURCES})
-        # ------- Removed for debugging - maybe should be removed in general -------
-       # ../UserCommon/UC_src/ExtSatelliteView.cpp)
-        # -------------------------
 
-# Exact filename required by the assignment (no 'lib' prefix on Linux)
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "GameManager_${SUBMITTER_IDS}"
-        PREFIX ""                       # => GameManager_<ids>.so, not libGameManager_*.so
+        PREFIX ""
         POSITION_INDEPENDENT_CODE ON
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})  # <== Output here
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})
 
-# Public includes:
-# - this project’s headers
-# - course-provided 'common' (as-is; do not modify/add)
-# - your 'UserCommon' headers
+# Includes
 target_include_directories(${TARGET_NAME}
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/GM_include
         ${CMAKE_CURRENT_LIST_DIR}/../common
         ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include)
 
-# Link against your shared UserCommon lib
-target_link_libraries(${TARGET_NAME} PRIVATE usercommon)
-
-# Ensure the plugin can find libusercommon.so at runtime
-set_target_properties(${TARGET_NAME} PROPERTIES
-  BUILD_RPATH "\$ORIGIN"
-  INSTALL_RPATH "\$ORIGIN"
-)
-
-# After building the plugin, copy libusercommon.so next to it
-add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          $<TARGET_FILE:usercommon>
-          $<TARGET_FILE_DIR:${TARGET_NAME}>
-)
+# --- Always bundle UserCommon into this .so (no external libusercommon.so) ---
+# Pull in the object files from the UserCommon object library
+target_sources(${TARGET_NAME} PRIVATE $<TARGET_OBJECTS:usercommon_obj>)
+# (No link to 'usercommon' SHARED, no RPATH, no post-build copy)
 
 # Warnings
 if (MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-, 
-    # -------- Added for debugging -------
-    $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
-    # --------------------------------------
+    target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive- 
+        $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-
-# Nothing to link here; Simulator will dlopen() this .so at runtime (Linux).
-# Do NOT compile registration .cpps here; they belong to Simulator.:contentReference[oaicite:1]{index=1}

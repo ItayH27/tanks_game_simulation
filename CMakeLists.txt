@@ -1,32 +1,6 @@
 # ============================
 # Root CMakeLists.txt
 # ============================
-# This top-level build drives all 3 parts, per the assignment:
-#   1) GameManager  -> shared library:  GameManager_<id1>_<id2>.so
-#   2) Algorithm    -> shared library:  Algorithm_<id1>_<id2>.so
-#   3) Simulator    -> executable:      simulator_<id1>_<id2>
-# Notes:
-# - GameManager & Algorithm are .so plugins loaded dynamically by the Simulator.
-# - Their filenames MUST include both submitter IDs and be unique.
-# - 'common/' headers are staff-provided and used as-is; your shared headers go in 'UserCommon/'.
-# - Auto-registration headers are shared, but the *implementations* of registration constructors
-#   (e.g., PlayerRegistration.cpp, TankAlgorithmRegistration.cpp, GameManagerRegistration.cpp)
-#   belong ONLY to the Simulator project.
-# - Linux build: requires -ldl (dlopen/dlclose) and pthreads for multithreading.
-#
-# Usage (from repo root):
-#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSUBMITTER_IDS=<id1>_<id2>
-#   cmake --build build --target build_all --config Release
-#
-# Optional tests (outer scope only; plugins themselves do NOT add tests):
-#   -DBUILD_TESTS=ON [-DFETCH_GTEST=ON] then: ctest --test-dir build --output-on-failure
-#
-# Assignment references:
-# - 3 separate parts; Algorithm & GameManager as .so; Simulator loads them dynamically.
-# - Unique, ID-based filenames for Algorithm/GameManager plugins; Simulator exe name format.
-# - Registration headers shared; registration .cpp implementations are part of the Simulator only.
-#
-
 cmake_minimum_required(VERSION 3.16)
 project(Ex3_Tanks LANGUAGES CXX)
 
@@ -55,12 +29,12 @@ if(ENABLE_ASAN)
 endif()
 
 # -------------------------
-# Subprojects (each has its own CMakeLists.txt)
+# Subprojects (order matters: UserCommon first if others link/consume it)
 # -------------------------
+add_subdirectory(UserCommon)  
 add_subdirectory(GameManager)  # builds GameManager_<ids>.so
 add_subdirectory(Algorithm)    # builds Algorithm_<ids>.so
 add_subdirectory(Simulator)    # builds simulator_<ids> (with main)
-add_subdirectory(UserCommon)
 
 set_target_properties(simulator_${SUBMITTER_IDS} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -76,7 +50,6 @@ add_custom_target(build_all
 
 # -------------------------
 # Optional: outer-scope tests (GoogleTest)
-# These never touch the Algorithm/GameManager targets directly.
 # -------------------------
 option(BUILD_TESTS "Build tests in tests/ (outer scope)" OFF)
 option(FETCH_GTEST "Fetch GoogleTest if not found" OFF)
@@ -85,7 +58,6 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     include(CTest)
     enable_testing()
 
-    # Try to find GTest; fetch if requested
     find_package(GTest QUIET)
     if(NOT GTest_FOUND AND FETCH_GTEST)
         include(FetchContent)
@@ -105,7 +77,6 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
                     UserCommon/UC_src/ExtSatelliteView.cpp)
             target_compile_features(${name} PRIVATE cxx_std_17)
 
-            # Tests see public headers they need (no linking to the plugins).
             target_include_directories(${name} PRIVATE
                     ${CMAKE_SOURCE_DIR}/common
                     ${CMAKE_SOURCE_DIR}/UserCommon/UC_include

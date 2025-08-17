@@ -15,40 +15,31 @@
 #       PlayerRegistration.cpp, TankAlgorithmRegistration.cpp, GameManagerRegistration.cpp,
 #     and any registrar/helper used to store discovered factories.
 
+# ==============================
+# Simulator/CMakeLists.txt — exe
+# ==============================
 cmake_minimum_required(VERSION 3.16)
 project(SimulatorProj LANGUAGES CXX)
 
-# ---- IDs are required to name the executable per the assignment spec ----
-# Build from the Simulator/ dir like:
-#   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-#   cmake --build build --config Release
-#
 set(SUBMITTER_IDS "209277367_322542887" CACHE STRING "Submitter IDs" FORCE)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ------- Added for debugging purposes -------
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# --------------------------------------
 
-# Detect if this dir is the top-level (so we can set local output dirs only then)
 set(TOP_LEVEL OFF)
 if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     set(TOP_LEVEL ON)
 endif()
 
-# --------------------------------------
-# Simulator executable and sources
-# --------------------------------------
 file(GLOB_RECURSE SIM_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cpp
         ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cc
         ${CMAKE_CURRENT_LIST_DIR}/sim_src/*.cxx
 )
-
 if(SIM_SOURCES STREQUAL "")
     message(FATAL_ERROR "No sources under Simulator/sim_src")
 endif()
@@ -56,21 +47,15 @@ endif()
 set(TARGET_NAME simulator_${SUBMITTER_IDS})
 add_executable(${TARGET_NAME} ${SIM_SOURCES})
 
-# Export symbols from the simulator so plugins can resolve registration ctors
+# Export symbols so plugins can resolve registration ctors
 set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS ON)
-target_link_options(${TARGET_NAME} PRIVATE -Wl,-E)   # aka --export-dynamic
+target_link_options(${TARGET_NAME} PRIVATE -Wl,-E)
 
-# ------- Added for debugging purposes -------
-# target_link_options(${TARGET_NAME} PRIVATE -Wl,--export-dynamic) 
-# --------------------------------------------
-
-# Exact output name required by the assignment: simulator_<ids>
 set_target_properties(${TARGET_NAME} PROPERTIES
         OUTPUT_NAME "simulator_${SUBMITTER_IDS}"
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/..
 )
 
-# Includes for the simulator target
 target_include_directories(${TARGET_NAME}
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/sim_include
@@ -78,23 +63,19 @@ target_include_directories(${TARGET_NAME}
         ${CMAKE_CURRENT_LIST_DIR}/../UserCommon/UC_include
 )
 
-# Warnings
-if (MSVC)
-    # target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
-    # ------- Added for debugging purposes -------
-    target_compile_options(${TARGET_NAME} PRIVATE
-        $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>) 
-    # --------------------------------------------
+# --- Always bundle UserCommon here as well ---
+target_sources(${TARGET_NAME} PRIVATE $<TARGET_OBJECTS:usercommon_obj>)
 
+if (MSVC)
+    target_compile_options(${TARGET_NAME} PRIVATE
+        $<$<CONFIG:Debug>:-O0 -g -fno-omit-frame-pointer>)
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Threads (std::thread) and dlopen/dlsym/dlclose on Linux
 find_package(Threads REQUIRED)
 target_link_libraries(${TARGET_NAME}
         PRIVATE
-        usercommon
         Threads::Threads
         dl
 )
