@@ -285,11 +285,11 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         lock_guard<mutex> lock(allResultsMutex_);
         allResults.emplace_back(makeSnapshot(result,mapData_.rows, mapData_.cols), gm_name);
         }
-    }
-    {
+    
         lock_guard<mutex> lock(gmRegistrarmutex_);
-        game_manager_registrar->removeLast();
+        game_manager_registrar->eraseByName(gm_name); // Remove the GameManager entry by name
     }
+    
 
     // Remove the GameManager entry from the registrar and close the handle
     dlclose(gm_handle); // Close the GameManager shared object handle

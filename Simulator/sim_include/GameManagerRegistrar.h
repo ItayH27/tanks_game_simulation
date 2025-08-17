@@ -47,6 +47,14 @@ public:
     }
 
     void removeLast() { managers_.pop_back(); }
+    void eraseByName(const string& name) {
+        managers_.erase(
+            std::remove_if(managers_.begin(), managers_.end(),
+                           [&](const auto& a){ return a.name() == name; }),
+            managers_.end()
+        );
+    }
+
     bool empty() { return managers_.empty(); }
 
     auto begin() const { return managers_.begin(); }
