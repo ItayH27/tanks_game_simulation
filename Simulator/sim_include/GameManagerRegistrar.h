@@ -47,6 +47,7 @@ public:
     }
 
     void removeLast() { managers_.pop_back(); }
+    bool empty() { return managers_.empty(); }
 
     auto begin() const { return managers_.begin(); }
     auto end() const { return managers_.end(); }

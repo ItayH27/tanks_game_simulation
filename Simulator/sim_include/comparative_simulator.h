@@ -51,17 +51,43 @@ private:
     void runGames();
     void runSingleGame(const path& gmPath);
 
+    
+
+    struct SnapshotGameResult {
+        int winner;
+        GameResult::Reason reason;
+        std::vector<size_t> remaining_tanks;
+        std::vector<std::vector<char>> board; // hard copy of final board
+        size_t rounds;
+    };
+
+    SnapshotGameResult makeSnapshot(const GameResult& gr, size_t rows, size_t cols) {
+        SnapshotGameResult snap;
+        snap.winner = gr.winner;
+        snap.reason = gr.reason;
+        snap.remaining_tanks = gr.remaining_tanks;
+        snap.rounds = gr.rounds;
+
+        snap.board.resize(rows, std::vector<char>(cols));
+        for (size_t y = 0; y < rows; ++y) {
+            for (size_t x = 0; x < cols; ++x) {
+                snap.board[y][x] = gr.gameState->getObjectAt(x, y);
+            }
+        }
+        return snap;
+    }
+
     struct GameResultInfo {
-        GameResult result;
+        SnapshotGameResult result;
         vector<string> gm_names;
         int count = 0;
     };
 
-    vector<pair<GameResult,string>> allResults;
+    vector<pair<SnapshotGameResult,string>> allResults;
     vector<GameResultInfo> groups;
 
-    bool sameResult(const GameResult& a, const GameResult& b) const;
-    void makeGroups(vector<pair<GameResult,string>>& results);
+    bool sameResult(const SnapshotGameResult& a, const SnapshotGameResult& b) const;
+    void makeGroups(vector<pair<SnapshotGameResult,string>>& results);
 
     void writeOutput(const string& mapPath,
                      const string& algorithmSoPath1,
@@ -70,6 +96,8 @@ private:
     string BuildOutputBuffer(const string& mapPath,
                      const string& algorithmSoPath1,
                      const string& algorithmSoPath2);
+
+    static void printSatellite(std::ostream& os, const SnapshotGameResult& result);
 
     static string getFilename(const string& path) {
         return std::filesystem::path(path).filename().string();

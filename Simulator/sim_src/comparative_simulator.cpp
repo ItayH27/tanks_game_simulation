@@ -34,6 +34,9 @@ ComparativeSimulator::~ComparativeSimulator() {
     algo1_.reset();
     algo2_.reset();
 
+    game_manager_registrar->clear(); // Clear the GameManager registrar
+    algo_registrar->clear(); // Clear the Algorithm registrar
+
     lock_guard<mutex> lock(handlesMutex_);
     for (auto& handle : algoHandles_) {
         if (handle) {
@@ -229,6 +232,12 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
+        if (game_manager_registrar->empty()) {
+            std::cerr << "Error: Registrar is empty\n";
+            dlclose(gm_handle);
+            return;
+
+        }
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
         if (!gm.hasFactory()){
             lock_guard<mutex> lock(stderrMutex_);
@@ -244,9 +253,10 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
             return;
         }
-        gm_name = gm.name();
-        }
 
+        gm_name = gm.name();
+
+        }
         // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         unique_ptr<Player> player2 = algo2_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
@@ -255,6 +265,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             std::cerr << "Error: Failed to create players from algorithms." << std::endl;
             return;
         }
+
         // Get algorithm names and factories
         string name1 = algo1_->name();
         string name2 = algo2_->name();
@@ -271,13 +282,16 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
 
         // Store the result in allResults
         {
-        lock_guard<mutex> lock(stderrMutex_);
-        allResults.emplace_back(std::move(result), gm_name);
+        lock_guard<mutex> lock(allResultsMutex_);
+        allResults.emplace_back(makeSnapshot(result,mapData_.rows, mapData_.cols), gm_name);
         }
+    }
+    {
+        lock_guard<mutex> lock(gmRegistrarmutex_);
+        game_manager_registrar->removeLast();
     }
 
     // Remove the GameManager entry from the registrar and close the handle
-    game_manager_registrar->removeLast();
     dlclose(gm_handle); // Close the GameManager shared object handle
 }
 
@@ -291,21 +305,15 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
  * @param b Second GameResult to compare.
  * @return true if both results are identical, false otherwise.
  */
-bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) const {
+bool ComparativeSimulator::sameResult(const SnapshotGameResult& a, const SnapshotGameResult& b) const {
     // Check if the winners, reasons, and rounds are the same
     if (a.winner != b.winner || a.reason != b.reason || a.rounds != b.rounds) {
         return false;
     }
     // Check if the end map is the same
-    const SatelliteView& viewA = *a.gameState;
-    const SatelliteView& viewB = *b.gameState;
-
-    for (int y = 0; y < mapData_.rows; y++) {
-        for (int x = 0; x < mapData_.cols; x++) {
-            if (viewA.getObjectAt(x,y) != viewB.getObjectAt(x,y)) {
-                return false;
-            }
-        }
+    if (a.board.size() != b.board.size()) return false;
+    for (size_t y = 0; y < a.board.size(); ++y) {
+        if (a.board[y] != b.board[y]) return false;
     }
     return true;
 }
@@ -317,7 +325,7 @@ bool ComparativeSimulator::sameResult(const GameResult& a, const GameResult& b) 
  *
  * @param results Vector of game results paired with their GameManager names.
  */
-void ComparativeSimulator::makeGroups(vector<pair<GameResult, string>>& results) {
+void ComparativeSimulator::makeGroups(vector<pair<SnapshotGameResult, string>>& results) {
     for (auto& result : results) {
         bool placed = false;
         for (auto& group : groups) {
@@ -378,14 +386,13 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
 }
 
 
-static void printSatellite(std::ostream& os,
-                           const SatelliteView& view,
-                           size_t width, size_t height) {
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t x = 0; x < width;  ++x) {
-            os << view.getObjectAt(x, y);
+void ComparativeSimulator::printSatellite(std::ostream& os,
+                           const SnapshotGameResult& result) {
+    for (size_t y = 0; y < result.board.size(); ++y) {
+        for (size_t x = 0; x < result.board[y].size(); ++x) {
+            os << result.board[y][x];
         }
-        os << '\n';
+        os << "\n";
     }
 }
 
@@ -400,7 +407,7 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         << "\n";
 
     while (!groups.empty()) {
-        auto group = move(groups.back());
+        auto group = groups.back();
         groups.pop_back();
 
         for (size_t i = 0; i < group.gm_names.size()-1 ; i++) {
@@ -410,14 +417,14 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
             << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
             << group.result.rounds << endl;
 
-        printSatellite(oss, *group.result.gameState, mapData_.cols, mapData_.rows);
+        printSatellite(oss, group.result);
         if (groups.size() > 0) {
             oss << "\n";
         }
     }
 
-
-
     return oss.str();
 }
+
+
 
