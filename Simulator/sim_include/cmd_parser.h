@@ -36,6 +36,13 @@ public:
         }
     };
 
+
+    ~CmdParser() = delete;
+    CmdParser(const CmdParser&) = delete;
+    CmdParser& operator=(const CmdParser&) = delete;
+    CmdParser(CmdParser&&) = delete;
+    CmdParser& operator=(CmdParser&&);
+    
     static ParseResult parse(int argc, char** argv);
     static void printUsage();
 };

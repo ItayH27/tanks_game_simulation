@@ -24,6 +24,10 @@ class CompetitiveSimulator : public Simulator {
 #endif
 public:
     CompetitiveSimulator(bool verbose, size_t numThreads);
+    CompetitiveSimulator(const CompetitiveSimulator&) = delete;
+    CompetitiveSimulator& operator=(const CompetitiveSimulator&) = delete;
+    CompetitiveSimulator(CompetitiveSimulator&&) = delete;
+    CompetitiveSimulator& operator=(CompetitiveSimulator&&) = delete;
     ~CompetitiveSimulator();
 
     int run(const string& mapsFolder,

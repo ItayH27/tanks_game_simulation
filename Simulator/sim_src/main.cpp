@@ -33,6 +33,6 @@ int main(int argc, char** argv) {
         std::cerr << "Fatal error during simulation: " << error.what() << "\n";
         return 1;
     }
-
+    
     return 0;
 }
