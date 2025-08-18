@@ -49,46 +49,70 @@ add_custom_target(build_all
 )
 
 # -------------------------
-# Optional: outer-scope tests (GoogleTest)
+# Tests (always available; auto-fetch GoogleTest)
 # -------------------------
-option(BUILD_TESTS "Build tests in tests/ (outer scope)" OFF)
-option(FETCH_GTEST "Fetch GoogleTest if not found" OFF)
+include(CTest)
+enable_testing()
 
-if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
-    include(CTest)
-    enable_testing()
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+  )
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+endif()
 
-    find_package(GTest QUIET)
-    if(NOT GTest_FOUND AND FETCH_GTEST)
-        include(FetchContent)
-        FetchContent_Declare(
-                googletest
-                URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-        )
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(googletest)
-    endif()
+if(BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
+  file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/*.cpp")
 
-    if(GTest_FOUND OR TARGET gtest)
-        file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/*.cpp")
-        foreach(src ${TEST_SOURCES})
-            get_filename_component(name ${src} NAME_WE)
-            add_executable(${name} ${src}
-                    UserCommon/UC_src/ExtSatelliteView.cpp)
-            target_compile_features(${name} PRIVATE cxx_std_17)
+  # All implementation sources required by tests (compiled into each test exe)
+  set(SIM_IMPL_SOURCES
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/competitive_simulator.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/comparative_simulator.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/cmd_parser.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/Simulator.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/GameManagerRegistrar.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/GameManagerRegistration.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/AlgorithmRegistrar.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/TankAlgorithmRegistration.cpp
+    ${CMAKE_SOURCE_DIR}/Simulator/sim_src/PlayerRegistration.cpp
+  )
 
-            target_include_directories(${name} PRIVATE
-                    ${CMAKE_SOURCE_DIR}/common
-                    ${CMAKE_SOURCE_DIR}/UserCommon/UC_include
-                    ${CMAKE_SOURCE_DIR}/Simulator/sim_include
-            )
-            target_link_libraries(${name} PRIVATE
-                    GTest::gtest GTest::gtest_main
-                    pthread dl
-            )
-            add_test(NAME ${name} COMMAND ${name})
-        endforeach()
-    else()
-        message(WARNING "GTest not found and FETCH_GTEST=OFF; skipping tests.")
-    endif()
+  # UserCommon pieces the simulator depends on
+  set(USERCOMMON_IMPL_SOURCES
+    ${CMAKE_SOURCE_DIR}/UserCommon/UC_src/ExtSatelliteView.cpp
+    ${CMAKE_SOURCE_DIR}/UserCommon/UC_src/ExtBattleInfo.cpp
+    ${CMAKE_SOURCE_DIR}/UserCommon/UC_src/Shell.cpp
+  )
+
+  foreach(src ${TEST_SOURCES})
+    get_filename_component(name ${src} NAME_WE)
+
+    add_executable(${name}
+      ${src}
+      ${SIM_IMPL_SOURCES}
+      ${USERCOMMON_IMPL_SOURCES}
+    )
+
+    target_compile_features(${name} PRIVATE cxx_std_20)
+
+    target_include_directories(${name} PRIVATE
+      ${CMAKE_SOURCE_DIR}/common
+      ${CMAKE_SOURCE_DIR}/UserCommon/UC_include
+      ${CMAKE_SOURCE_DIR}/Simulator/sim_include
+      ${CMAKE_SOURCE_DIR}/GameManager/GM_include
+      ${CMAKE_SOURCE_DIR}/Algorithm/Algo_include
+    )
+
+    target_link_libraries(${name} PRIVATE
+      GTest::gtest GTest::gtest_main
+      pthread dl
+    )
+
+    add_test(NAME ${name} COMMAND ${name})
+  endforeach()
 endif()

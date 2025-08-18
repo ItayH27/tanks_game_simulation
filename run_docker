@@ -153,5 +153,6 @@ VSCode build:
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 (cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON)
 cmake --build build
+ctest --test-dir build --output-on-failure // Run all tests
 (ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 LSAN_OPTIONS=verbosity=1:log_threads=1 ./simulator_209277367_322542887 -competition   game_maps_folder=1_maps   game_manager=1_gm_so/GameManager_test_209277367_322542887.so   algorithms_folder=1_algo_so   -verbose))
 
