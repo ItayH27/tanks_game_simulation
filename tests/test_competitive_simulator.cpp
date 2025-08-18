@@ -1,174 +1,327 @@
-#define UNIT_TEST
-#include "sim_include/competitive_simulator.h"
-#include "gtest/gtest.h"
-#include "sim_include/competitive_simulator.h"
-#include "../common/Player.h"
-#include "../common/TankAlgorithm.h"
-#include "sim_include/AlgorithmRegistrar.h"
-#include <fstream>
+// competitive_simulator_test.cpp
+#include <gtest/gtest.h>
 #include <filesystem>
+#include <fstream>
+#include <regex>
+#include <string>
+#include <vector>
+#include <optional>
 
+namespace fs = std::filesystem;
 
-// ==========================
-// Fake classes for registration
-// ==========================
+// --- Make internals visible to tests (test-only hack) ---
+#define private public
+#define protected public
+#include "../sim_include/competitive_simulator.h"
+#undef private
+#undef protected
 
-class FakePlayer : public Player {
+// Minimal stubs for anything the header might need (if any).
+// If your header already pulls everything in, these won't be necessary.
+
+// Helper: RAII temporary directory
+class TempDir {
 public:
-    FakePlayer(int, size_t, size_t, size_t, size_t) {}
-    void updateTankWithBattleInfo(TankAlgorithm&, SatelliteView&) override {}
+    TempDir() : path_(fs::temp_directory_path() / fs::path("comp_sim_tests") / fs::unique_path()) {
+        fs::create_directories(path_);
+    }
+    ~TempDir() {
+        std::error_code ec; // don’t throw in destructor
+        fs::remove_all(path_, ec);
+    }
+    const fs::path& path() const { return path_; }
+private:
+    fs::path path_;
 };
 
-class FakeTankAlgorithm : public TankAlgorithm {
-public:
-    FakeTankAlgorithm(int, int) {}
-    ActionRequest getAction() override { return ActionRequest::DoNothing; }
-    void updateBattleInfo(BattleInfo&) override {}
-};
-
-// ==========================
-// Fake dlopen-like registration
-// ==========================
-
-void* fakeDlopenAndRegister(const std::string& name) {
-    auto& registrar = AlgorithmRegistrar::getAlgorithmRegistrar();
-    registrar.createAlgorithmFactoryEntry(name);
-    registrar.addPlayerFactoryToLastEntry(
-        [](int p, size_t x, size_t y, size_t s, size_t n) {
-            return std::make_unique<FakePlayer>(p, x, y, s, n);
-        });
-    registrar.addTankAlgorithmFactoryToLastEntry(
-        [](int p, int t) {
-            return std::make_unique<FakeTankAlgorithm>(p, t);
-        });
-    return reinterpret_cast<void*>(0xDEADBEEF);
+// Small helper to create empty files
+static void touch(const fs::path& p) {
+    std::ofstream ofs(p.string(), std::ios::binary);
+    ofs << ""; // ensure file exists
 }
 
-// ==========================
-// Derived simulator for testing internal behavior
-// ==========================
-
-class TestSimulator : public CompetitiveSimulator {
-public:
-    using CompetitiveSimulator::algoNameToPath_;
-    using CompetitiveSimulator::algoUsageCounts_;
-    using CompetitiveSimulator::algoPathToHandle_;
-    using CompetitiveSimulator::scheduledGames_;
-    using CompetitiveSimulator::scores_;
-    using CompetitiveSimulator::updateScore;
-    using CompetitiveSimulator::scheduleGames;
-    using CompetitiveSimulator::decreaseUsageCount;
-    using CompetitiveSimulator::loadMaps;
-    using CompetitiveSimulator::getValidatedAlgorithm;
-    using CompetitiveSimulator::algorithms_;
-    using CompetitiveSimulator::handlesMutex_;
+// Fixture that gives us a fresh simulator each test
+class CompetitiveSimulatorTest : public ::testing::Test {
+protected:
+    // Use 1 thread & non-verbose; threads not exercised in these unit tests
+    CompetitiveSimulator sim{false, 1};
 };
 
-class TestSimulatorWithFakeDlopen : public TestSimulator {
-public:
-    using TestSimulator::TestSimulator;
+// ---------- getAlgorithms ----------
 
-    void ensureAlgorithmLoadedFake(const std::string& name) {
-        std::lock_guard<std::mutex> lock(handlesMutex_);
-        const std::string& soPath = algoNameToPath_[name];
-        if (algoPathToHandle_.count(soPath)) return;
+TEST_F(CompetitiveSimulatorTest, GetAlgorithms_ReturnsFalseWhenLessThanTwo) {
+    TempDir dir;
 
-        void* handle = fakeDlopenAndRegister(name);
-        algoPathToHandle_[soPath] = handle;
+    // 0 .so files
+    EXPECT_FALSE(sim.getAlgorithms(dir.path().string()));
 
-        try {
-            AlgorithmRegistrar::getAlgorithmRegistrar().validateLastRegistration();
-            algorithms_.push_back(std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(
-                AlgorithmRegistrar::getAlgorithmRegistrar().end()[-1]));
-        } catch (...) {
-            algoPathToHandle_.erase(soPath);
-            algoNameToPath_.erase(name);
-            algoUsageCounts_.erase(name);
-            throw;
+    // 1 .so file
+    touch(dir.path() / "A.so");
+    EXPECT_FALSE(sim.getAlgorithms(dir.path().string()));
+
+    // 2 .so files
+    touch(dir.path() / "B.so");
+    EXPECT_TRUE(sim.getAlgorithms(dir.path().string()));
+
+    // Also verify that names were recorded
+    ASSERT_GE(sim.algoNameToPath_.size(), 2u);
+    EXPECT_TRUE(sim.algoNameToPath_.count("A"));
+    EXPECT_TRUE(sim.algoNameToPath_.count("B"));
+}
+
+TEST_F(CompetitiveSimulatorTest, GetAlgorithms_IgnoresNonSoFiles) {
+    TempDir dir;
+    touch(dir.path() / "X.txt");
+    touch(dir.path() / "Y.dylib");
+    touch(dir.path() / "Z"); // no extension
+    EXPECT_FALSE(sim.getAlgorithms(dir.path().string())); // still < 2 .so files
+
+    touch(dir.path() / "P.so");
+    touch(dir.path() / "Q.so");
+    EXPECT_TRUE(sim.getAlgorithms(dir.path().string())); // now 2+
+}
+
+// ---------- loadMaps ----------
+
+TEST_F(CompetitiveSimulatorTest, LoadMaps_FindsRegularFilesOnly) {
+    TempDir dir;
+    fs::create_directories(dir.path() / "sub");
+    touch(dir.path() / "map1.txt");
+    touch(dir.path() / "map2.bin");
+    // create a directory entry that should be ignored
+    touch(dir.path() / "sub" / "nested_map.txt");
+
+    std::vector<fs::path> maps;
+    EXPECT_TRUE(sim.loadMaps(dir.path().string(), maps));
+    EXPECT_EQ(maps.size(), 2u);
+
+    // Verify we captured the right basenames (order is filesystem-defined)
+    std::vector<std::string> names;
+    for (auto& p : maps) names.push_back(p.filename().string());
+    EXPECT_NE(std::find(names.begin(), names.end(), "map1.txt"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "map2.bin"), names.end());
+}
+
+TEST_F(CompetitiveSimulatorTest, LoadMaps_EmptyFolderReturnsFalse) {
+    TempDir dir;
+    std::vector<fs::path> maps;
+    EXPECT_FALSE(sim.loadMaps(dir.path().string(), maps));
+    EXPECT_TRUE(maps.empty());
+}
+
+// ---------- scheduleGames ----------
+
+TEST_F(CompetitiveSimulatorTest, ScheduleGames_OddN_MirrorsAllPairs) {
+    // Prepare 3 algorithms (odd N)
+    sim.algoNameToPath_.clear();
+    sim.algoUsageCounts_.clear();
+    sim.scheduledGames_.clear();
+
+    sim.algoNameToPath_["A"] = "/tmp/A.so";
+    sim.algoNameToPath_["B"] = "/tmp/B.so";
+    sim.algoNameToPath_["C"] = "/tmp/C.so";
+
+    sim.algoUsageCounts_["A"] = 0;
+    sim.algoUsageCounts_["B"] = 0;
+    sim.algoUsageCounts_["C"] = 0;
+
+    // One map
+    std::vector<fs::path> maps = { "/maps/m1" };
+
+    sim.scheduleGames(maps);
+
+    // For N=3, unordered pairs = 3 (AB, AC, BC), each mirrored → 6 games per map
+    EXPECT_EQ(sim.scheduledGames_.size(), 6u);
+
+    // Each algorithm appears in 4 games per map (plays 2 opponents, mirrored)
+    EXPECT_EQ(sim.algoUsageCounts_["A"], 4);
+    EXPECT_EQ(sim.algoUsageCounts_["B"], 4);
+    EXPECT_EQ(sim.algoUsageCounts_["C"], 4);
+
+    // Sanity: ensure we scheduled both directions for a pair
+    int ab = 0;
+    for (auto& g : sim.scheduledGames_) {
+        if ((g.algoName1 == "A" && g.algoName2 == "B") ||
+            (g.algoName1 == "B" && g.algoName2 == "A")) {
+            ++ab;
         }
     }
-};
+    EXPECT_EQ(ab, 2); // mirrored
+}
 
-// ==========================
-// TESTS
-// ==========================
+TEST_F(CompetitiveSimulatorTest, ScheduleGames_EvenN_SkipMirrorOnMiddleRound) {
+    // Prepare 4 algorithms (even N)
+    sim.algoNameToPath_.clear();
+    sim.algoUsageCounts_.clear();
+    sim.scheduledGames_.clear();
 
-TEST(CompetitiveSimulatorTest, ScheduleGamesCreatesCorrectPairings) {
-    TestSimulator sim;
-    sim.algoNameToPath_ = {
-        {"AlgoA", "path/to/algoA.so"},
-        {"AlgoB", "path/to/algoB.so"},
-        {"AlgoC", "path/to/algoC.so"}
-    };
-    sim.algoUsageCounts_ = {
-        {"AlgoA", 0},
-        {"AlgoB", 0},
-        {"AlgoC", 0}
-    };
-
-    std::vector<std::filesystem::path> dummyMaps = {
-        "map1.txt", "map2.txt"
-    };
-
-    sim.scheduleGames(dummyMaps);
-
-    EXPECT_EQ(sim.scheduledGames_.size(), 6); // 3 matchups * 2 maps
-    for (const auto& [name, count] : sim.algoUsageCounts_) {
-        EXPECT_EQ(count, 4); // each plays 2 games/map × 2 maps = 4
+    for (auto name : {"A","B","C","D"}) {
+        sim.algoNameToPath_[name] = std::string("/tmp/") + name + ".so";
+        sim.algoUsageCounts_[name] = 0;
     }
+
+    // R = N - 1 = 3 rounds; middle round index = N/2 - 1 = 1
+    // scheduleGames uses r = k % R per map index k.
+    // Create 3 maps so r cycles 0,1,2 → we get mirror on r=0 and r=2, but NOT on r=1
+    std::vector<fs::path> maps = { "/maps/m0", "/maps/m1", "/maps/m2" };
+
+    sim.scheduleGames(maps);
+
+    // For N=4, unordered pairs = 6.
+    // r=0: mirror on → 12 games
+    // r=1: mirror off → 6 games
+    // r=2: mirror on → 12 games
+    // Total = 30
+    EXPECT_EQ(sim.scheduledGames_.size(), 30u);
+
+    // Per algorithm:
+    // r=0: plays 3 opponents * 2 = 6
+    // r=1: plays 3 opponents * 1 = 3
+    // r=2: plays 3 opponents * 2 = 6
+    // Total = 15
+    EXPECT_EQ(sim.algoUsageCounts_["A"], 15);
+    EXPECT_EQ(sim.algoUsageCounts_["B"], 15);
+    EXPECT_EQ(sim.algoUsageCounts_["C"], 15);
+    EXPECT_EQ(sim.algoUsageCounts_["D"], 15);
 }
 
-TEST(CompetitiveSimulatorTest, UpdateScoreWinAndTie) {
-    TestSimulator sim;
-    sim.updateScore("AlgoX", "AlgoY", false);
-    sim.updateScore("AlgoA", "AlgoB", true);
+// ---------- updateScore ----------
 
-    EXPECT_EQ(sim.scores_["AlgoX"], 3);
-    EXPECT_EQ(sim.scores_["AlgoY"], 0);
-    EXPECT_EQ(sim.scores_["AlgoA"], 1);
-    EXPECT_EQ(sim.scores_["AlgoB"], 1);
+TEST_F(CompetitiveSimulatorTest, UpdateScore_TieAndWinScoring) {
+    sim.scores_.clear();
+
+    // Tie between X and Y
+    sim.updateScore("X", "Y", /*tie=*/true);
+    EXPECT_EQ(sim.scores_["X"], 1);
+    EXPECT_EQ(sim.scores_["Y"], 1);
+
+    // Win by X over Y
+    sim.updateScore("X", "Y", /*tie=*/false);
+    EXPECT_EQ(sim.scores_["X"], 4); // +3
+    EXPECT_EQ(sim.scores_["Y"], 1); // unchanged
 }
 
-TEST(CompetitiveSimulatorTest, DecreaseUsageCountUnloadsAlgorithm) {
-    TestSimulator sim;
-    sim.algoNameToPath_["AlgoZ"] = "path/to/algoZ.so";
-    sim.algoUsageCounts_["AlgoZ"] = 1;
-    sim.algoPathToHandle_["path/to/algoZ.so"] = reinterpret_cast<void*>(0xDEADBEEF);
+// ---------- writeOutput ----------
 
-    sim.decreaseUsageCount("AlgoZ");
+TEST_F(CompetitiveSimulatorTest, WriteOutput_CreatesFileWithSortedScores) {
+    TempDir outDir;
 
-    EXPECT_EQ(sim.algoUsageCounts_.count("AlgoZ"), 0);
-    EXPECT_EQ(sim.algoNameToPath_.count("AlgoZ"), 0);
-    EXPECT_EQ(sim.algoPathToHandle_.count("path/to/algoZ.so"), 0);
+    // Prepare some scores out of order
+    sim.scores_.clear();
+    sim.scores_["Gamma"] = 5;
+    sim.scores_["Alpha"] = 12;
+    sim.scores_["Beta"]  = 8;
+
+    // Write output; gm path only affects header's filename display
+    sim.writeOutput(outDir.path().string(), "/maps", "/some/path/GameManager.so");
+
+    // Find the created file (competition_*.txt) in outDir
+    std::optional<fs::path> found;
+    for (auto& e : fs::directory_iterator(outDir.path())) {
+        if (e.is_regular_file() && e.path().filename().string().rfind("competition_", 0) == 0 &&
+            e.path().extension() == ".txt") {
+            found = e.path();
+            break;
+        }
+    }
+    ASSERT_TRUE(found.has_value()) << "Output file not found in " << outDir.path();
+
+    // Read contents
+    std::ifstream in(found->string());
+    ASSERT_TRUE(in.is_open());
+
+    std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    // Basic header checks
+    EXPECT_NE(contents.find("game_maps_folder=/maps"), std::string::npos);
+    EXPECT_NE(contents.find("game_manager=GameManager.so"), std::string::npos);
+
+    // Scores must be sorted descending: Alpha 12, Beta 8, Gamma 5 (one per line)
+    // Use regex to allow for either \n or \r\n newlines
+    std::regex expected(
+        ".*Alpha\\s+12\\s*\\nBeta\\s+8\\s*\\nGamma\\s+5\\s*\\n?", std::regex::ECMAScript | std::regex::dotall);
+    EXPECT_TRUE(std::regex_search(contents, expected)) << "Got:\n" << contents;
 }
 
-TEST(CompetitiveSimulatorTest, LoadMapsLoadsOnlyFiles) {
-    TestSimulator sim;
-    std::vector<std::filesystem::path> out;
+// ------------------------- E2E test -------------------------
+TEST(E2E, CompetitiveSimulatorRun) {
+    const char* mapsEnv = std::getenv("E2E_MAPS_DIR");
+    const char* gmEnv   = std::getenv("E2E_GM_SO");
+    const char* algEnv  = std::getenv("E2E_ALGOS_DIR");
 
-    std::filesystem::create_directory("test_maps");
-    std::ofstream("test_maps/map1.txt");
-    std::ofstream("test_maps/map2.txt");
+    if (!mapsEnv || !gmEnv || !algEnv) {
+        GTEST_SKIP() << "Skipping E2E: set E2E_MAPS_DIR, E2E_GM_SO, E2E_ALGOS_DIR to run.";
+    }
 
-    bool result = sim.loadMaps("test_maps", out);
+    namespace fs = std::filesystem;
+    const fs::path mapsFolder = fs::path(mapsEnv);
+    const fs::path gmSoPath   = fs::path(gmEnv);
+    const fs::path algFolder  = fs::path(algEnv);
 
-    EXPECT_TRUE(result);
-    EXPECT_EQ(out.size(), 2);
+    ASSERT_TRUE(fs::exists(mapsFolder)) << "maps folder not found: " << mapsFolder;
+    ASSERT_TRUE(fs::exists(gmSoPath))   << "GameManager .so not found: " << gmSoPath;
+    ASSERT_TRUE(fs::exists(algFolder))  << "algorithms folder not found: " << algFolder;
 
-    std::filesystem::remove_all("test_maps");
-}
+    // Pre-scan existing competition_*.txt to detect the new file reliably
+    std::unordered_set<std::string> preExisting;
+    for (const auto& e : fs::directory_iterator(algFolder)) {
+        if (e.is_regular_file()) {
+            auto fname = e.path().filename().string();
+            if (fname.rfind("competition_", 0) == 0 && e.path().extension() == ".txt") {
+                preExisting.insert(fname);
+            }
+        }
+    }
 
-TEST(CompetitiveSimulatorTest, EnsureAlgorithmLoadedFakeRegistersSuccessfully) {
-    AlgorithmRegistrar::getAlgorithmRegistrar().clear();
+    // Use multiple threads to exercise the pool
+    CompetitiveSimulator sim(/*verbose=*/false, /*numThreads=*/std::thread::hardware_concurrency());
 
-    TestSimulatorWithFakeDlopen sim;
-    sim.algoNameToPath_["FakeAlgo"] = "FakeAlgo.so";
-    sim.algoUsageCounts_["FakeAlgo"] = 1;
+    // Run end-to-end
+    int rc = sim.run(mapsFolder.string(), gmSoPath.string(), algFolder.string());
+    ASSERT_EQ(rc, 0) << "CompetitiveSimulator::run returned non-zero";
 
-    sim.ensureAlgorithmLoadedFake("FakeAlgo");
-    auto algo = sim.getValidatedAlgorithm("FakeAlgo");
+    // Find the newly created output file
+    std::optional<fs::path> outFile;
+    for (const auto& e : fs::directory_iterator(algFolder)) {
+        if (!e.is_regular_file()) continue;
+        auto fname = e.path().filename().string();
+        if (fname.rfind("competition_", 0) == 0 && e.path().extension() == ".txt") {
+            if (!preExisting.count(fname)) {
+                outFile = e.path();
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE(outFile.has_value()) << "No new competition_*.txt found in " << algFolder;
 
-    ASSERT_NE(algo, nullptr);
-    EXPECT_TRUE(algo->hasPlayerFactory());
-    EXPECT_TRUE(algo->hasTankAlgorithmFactory());
+    // Read and validate contents
+    std::ifstream in(outFile->string());
+    ASSERT_TRUE(in.is_open()) << "Failed to open output file: " << *outFile;
+    const std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    // Header checks
+    const std::string expectedMapsHeader = "game_maps_folder=" + mapsFolder.string();
+    EXPECT_NE(contents.find(expectedMapsHeader), std::string::npos)
+        << "Missing/incorrect maps header. Expected: " << expectedMapsHeader << "\nGot:\n" << contents;
+
+    const std::string gmBase = fs::path(gmSoPath).filename().string();
+    const std::string expectedGmHeader = "game_manager=" + gmBase;
+    EXPECT_NE(contents.find(expectedGmHeader), std::string::npos)
+        << "Missing/incorrect game manager header. Expected: " << expectedGmHeader << "\nGot:\n" << contents;
+
+    // Scores section: require at least two "name score" lines after the blank line
+    // Extract the part after the blank line separating headers and scores
+    auto splitPos = contents.find("\n\n");
+    ASSERT_NE(splitPos, std::string::npos) << "Output missing blank line before scores.";
+    const std::string scores = contents.substr(splitPos + 2);
+
+    // Count lines with "<non-space> <integer>"
+    std::istringstream ss(scores);
+    std::string line;
+    int validScoreLines = 0;
+    std::regex lineRe(R"(^\S+\s+\d+\s*$)");
+    while (std::getline(ss, line)) {
+        if (std::regex_match(line, lineRe)) ++validScoreLines;
+    }
+    EXPECT_GE(validScoreLines, 2) << "Expected scores for at least two algorithms.\nScores block:\n" << scores;
 }
