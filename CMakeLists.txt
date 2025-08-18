@@ -49,46 +49,56 @@ add_custom_target(build_all
 )
 
 # -------------------------
-# Optional: outer-scope tests (GoogleTest)
+# Tests (always available; auto-fetch GoogleTest)
 # -------------------------
-option(BUILD_TESTS "Build tests in tests/ (outer scope)" OFF)
-option(FETCH_GTEST "Fetch GoogleTest if not found" OFF)
+# If you ever want to *temporarily* disable building/running tests, set:
+#   -DBUILD_TESTING=OFF
+include(CTest)
+enable_testing()
 
-if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
-    include(CTest)
-    enable_testing()
+# Try system GTest first; if not found, fetch it.
+find_package(GTest QUIET)
 
-    find_package(GTest QUIET)
-    if(NOT GTest_FOUND AND FETCH_GTEST)
-        include(FetchContent)
-        FetchContent_Declare(
-                googletest
-                URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-        )
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(googletest)
-    endif()
+if(NOT GTest_FOUND)
+  include(FetchContent)
+  # Use a stable, recent release
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+  )
+  # Common knobs (harmless on non-MSVC)
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  # Don't install gtest when the parent installs
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+endif()
 
-    if(GTest_FOUND OR TARGET gtest)
-        file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/*.cpp")
-        foreach(src ${TEST_SOURCES})
-            get_filename_component(name ${src} NAME_WE)
-            add_executable(${name} ${src}
-                    UserCommon/UC_src/ExtSatelliteView.cpp)
-            target_compile_features(${name} PRIVATE cxx_std_17)
+# Only scan/build tests if a tests/ folder exists and BUILD_TESTING is ON
+if(BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
+  file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/*.cpp")
 
-            target_include_directories(${name} PRIVATE
-                    ${CMAKE_SOURCE_DIR}/common
-                    ${CMAKE_SOURCE_DIR}/UserCommon/UC_include
-                    ${CMAKE_SOURCE_DIR}/Simulator/sim_include
-            )
-            target_link_libraries(${name} PRIVATE
-                    GTest::gtest GTest::gtest_main
-                    pthread dl
-            )
-            add_test(NAME ${name} COMMAND ${name})
-        endforeach()
-    else()
-        message(WARNING "GTest not found and FETCH_GTEST=OFF; skipping tests.")
-    endif()
+  foreach(src ${TEST_SOURCES})
+    get_filename_component(name ${src} NAME_WE)
+
+    add_executable(${name} ${src}
+      # Add any test-only .cpp you need compiled into tests here:
+      ${CMAKE_SOURCE_DIR}/UserCommon/UC_src/ExtSatelliteView.cpp
+    )
+
+    # Match project standard
+    target_compile_features(${name} PRIVATE cxx_std_20)
+
+    target_include_directories(${name} PRIVATE
+      ${CMAKE_SOURCE_DIR}/common
+      ${CMAKE_SOURCE_DIR}/UserCommon/UC_include
+      ${CMAKE_SOURCE_DIR}/Simulator/sim_include
+    )
+
+    target_link_libraries(${name} PRIVATE
+      GTest::gtest GTest::gtest_main
+      pthread dl
+    )
+
+    add_test(NAME ${name} COMMAND ${name})
+  endforeach()
 endif()

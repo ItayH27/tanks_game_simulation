@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include "./utils.test.cpp" 
 
 namespace fs = std::filesystem;
 
@@ -18,27 +19,6 @@ namespace fs = std::filesystem;
 
 // Minimal stubs for anything the header might need (if any).
 // If your header already pulls everything in, these won't be necessary.
-
-// Helper: RAII temporary directory
-class TempDir {
-public:
-    TempDir() : path_(fs::temp_directory_path() / fs::path("comp_sim_tests") / fs::unique_path()) {
-        fs::create_directories(path_);
-    }
-    ~TempDir() {
-        std::error_code ec; // don’t throw in destructor
-        fs::remove_all(path_, ec);
-    }
-    const fs::path& path() const { return path_; }
-private:
-    fs::path path_;
-};
-
-// Small helper to create empty files
-static void touch(const fs::path& p) {
-    std::ofstream ofs(p.string(), std::ios::binary);
-    ofs << ""; // ensure file exists
-}
 
 // Fixture that gives us a fresh simulator each test
 class CompetitiveSimulatorTest : public ::testing::Test {
@@ -239,7 +219,7 @@ TEST_F(CompetitiveSimulatorTest, WriteOutput_CreatesFileWithSortedScores) {
     // Scores must be sorted descending: Alpha 12, Beta 8, Gamma 5 (one per line)
     // Use regex to allow for either \n or \r\n newlines
     std::regex expected(
-        ".*Alpha\\s+12\\s*\\nBeta\\s+8\\s*\\nGamma\\s+5\\s*\\n?", std::regex::ECMAScript | std::regex::dotall);
+        ".*Alpha\\s+12\\s*\\nBeta\\s+8\\s*\\nGamma\\s+5\\s*\\n?", std::regex::ECMAScript);
     EXPECT_TRUE(std::regex_search(contents, expected)) << "Got:\n" << contents;
 }
 

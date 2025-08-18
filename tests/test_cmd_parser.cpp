@@ -1,10 +1,7 @@
+#include "cmd_parser.h"
 #include <gtest/gtest.h>
-#include "../Simulator/sim_include/cmd_parser.h"
 #include <vector>
 #include <string>
-
-using CmdParser::ParseResult;
-using CmdParser::Mode;
 
 namespace {
 
@@ -31,7 +28,7 @@ TEST(CmdParserTest, ValidComparativeBasic) {
     });
     auto result = CmdParser::parse(argv.size(), argv.data());
     EXPECT_TRUE(result.valid);
-    EXPECT_EQ(result.mode, Mode::Comparative);
+    EXPECT_EQ(result.mode, CmdParser::Mode::Comparative);
     EXPECT_EQ(result.gameMapFile, "map.txt");
     EXPECT_EQ(result.algorithm1File, "algo1.so");
 }
@@ -45,7 +42,7 @@ TEST(CmdParserTest, ValidCompetitionBasic) {
     });
     auto result = CmdParser::parse(argv.size(), argv.data());
     EXPECT_TRUE(result.valid);
-    EXPECT_EQ(result.mode, Mode::Competition);
+    EXPECT_EQ(result.mode, CmdParser::Mode::Competition);
     EXPECT_EQ(result.algorithmsFolder, "algos");
 }
 

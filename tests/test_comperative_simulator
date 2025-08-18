@@ -8,6 +8,8 @@
 #include <vector>
 #include <unordered_set>
 #include <optional>
+#include <thread>
+#include "./utils.test.cpp"
 
 namespace fs = std::filesystem;
 
@@ -19,34 +21,16 @@ namespace fs = std::filesystem;
 #undef protected
 
 // ---------- Helpers ----------
-class TempDir {
-public:
-    TempDir()
-        : path_(fs::temp_directory_path() / "comp_sim_cmp_tests" / fs::unique_path()) {
-        fs::create_directories(path_);
-    }
-    ~TempDir() {
-        std::error_code ec;
-        fs::remove_all(path_, ec);
-    }
-    const fs::path& path() const { return path_; }
-private:
-    fs::path path_;
-};
 
-static void touch(const fs::path& p, std::string_view data = "") {
-    std::ofstream ofs(p, std::ios::binary);
-    ofs << data;
-}
-
-// Make a tiny board from vector<string>
-static SnapshotGameResult mkResult(
-    int winner, int reason, int rounds, std::vector<std::string> boardRows) {
-    SnapshotGameResult r;
+// Make a tiny board from vector<vector<char>>
+static ComparativeSimulator::SnapshotGameResult mkResult(
+    int winner, int reason, size_t rounds, std::vector<std::vector<char>> boardRows) {
+    ComparativeSimulator::SnapshotGameResult r;
     r.winner = winner;
-    r.reason = reason;
+    r.reason = GameResult::Reason(reason);
     r.rounds = rounds;
     r.board  = std::move(boardRows);
+    r.remaining_tanks.clear(); // not used by these tests
     return r;
 }
 
@@ -84,32 +68,32 @@ TEST_F(ComparativeSimulatorUnitTest, GetGameManagers_OnlySoFilesDiscovered) {
 // ===================== sameResult =====================
 
 TEST_F(ComparativeSimulatorUnitTest, SameResult_PositiveWhenAllMatch) {
-    auto a = mkResult(1, 2, 100, {"abc", "def"});
-    auto b = mkResult(1, 2, 100, {"abc", "def"});
+    auto a = mkResult(1, 2, 100, rows({"abc", "def"}));
+    auto b = mkResult(1, 2, 100, rows({"abc", "def"}));
     EXPECT_TRUE(sim.sameResult(a, b));
 }
 
 TEST_F(ComparativeSimulatorUnitTest, SameResult_FalseOnWinnerMismatch) {
-    auto a = mkResult(1, 2, 100, {"abc"});
-    auto b = mkResult(2, 2, 100, {"abc"});
+    auto a = mkResult(1, 2, 100, rows({"abc"}));
+    auto b = mkResult(2, 2, 100, rows({"abc"}));
     EXPECT_FALSE(sim.sameResult(a, b));
 }
 
 TEST_F(ComparativeSimulatorUnitTest, SameResult_FalseOnReasonMismatch) {
-    auto a = mkResult(1, 2, 100, {"abc"});
-    auto b = mkResult(1, 3, 100, {"abc"});
+    auto a = mkResult(1, 2, 100, rows({"abc"}));
+    auto b = mkResult(1, 3, 100, rows({"abc"}));
     EXPECT_FALSE(sim.sameResult(a, b));
 }
 
 TEST_F(ComparativeSimulatorUnitTest, SameResult_FalseOnRoundsMismatch) {
-    auto a = mkResult(1, 2, 100, {"abc"});
-    auto b = mkResult(1, 2, 101, {"abc"});
+    auto a = mkResult(1, 2, 100, rows({"abc"}));
+    auto b = mkResult(1, 2, 101, rows({"abc"}));
     EXPECT_FALSE(sim.sameResult(a, b));
 }
 
 TEST_F(ComparativeSimulatorUnitTest, SameResult_FalseOnBoardMismatch) {
-    auto a = mkResult(1, 2, 100, {"abc", "def"});
-    auto b = mkResult(1, 2, 100, {"abc", "deg"}); // 2nd row differs
+    auto a = mkResult(1, 2, 100, rows({"abc", "def"}));
+    auto b = mkResult(1, 2, 100, rows({"abc", "deg"})); // 2nd row differs
     EXPECT_FALSE(sim.sameResult(a, b));
 }
 
@@ -118,10 +102,10 @@ TEST_F(ComparativeSimulatorUnitTest, SameResult_FalseOnBoardMismatch) {
 TEST_F(ComparativeSimulatorUnitTest, MakeGroups_ClustersEqualResultsAndCounts) {
     // Prepare three results: two identical, one different
     sim.groups.clear();
-    std::vector<std::pair<SnapshotGameResult, std::string>> results;
-    results.emplace_back(mkResult(1, 2, 100, {"..", "##"}), "GM_A");
-    results.emplace_back(mkResult(1, 2, 100, {"..", "##"}), "GM_B"); // same as first
-    results.emplace_back(mkResult(2, 1, 42,  {"xx"}),        "GM_C"); // different
+    std::vector<std::pair<ComparativeSimulator::SnapshotGameResult, std::string>> results;
+    results.emplace_back(mkResult(1, 2, 100, rows({"..", "##"})), "GM_A");
+    results.emplace_back(mkResult(1, 2, 100, rows({"..", "##"})), "GM_B"); // same as first
+    results.emplace_back(mkResult(2, 1, 42,  rows({"xx"})),        "GM_C"); // different
 
     sim.makeGroups(results);
 
@@ -129,7 +113,7 @@ TEST_F(ComparativeSimulatorUnitTest, MakeGroups_ClustersEqualResultsAndCounts) {
     ASSERT_EQ(sim.groups.size(), 2u);
 
     // Find the group with count=2
-    const auto* g2 = [&]()->const GameResultInfo*{
+    const auto* g2 = [&]()->const ComparativeSimulator::GameResultInfo*{
         for (const auto& g : sim.groups) if (g.count == 2) return &g; return nullptr;
     }();
     ASSERT_NE(g2, nullptr);
@@ -138,7 +122,7 @@ TEST_F(ComparativeSimulatorUnitTest, MakeGroups_ClustersEqualResultsAndCounts) {
     EXPECT_NE(std::find(g2->gm_names.begin(), g2->gm_names.end(), "GM_B"), g2->gm_names.end());
 
     // And the singleton group
-    const auto* g1 = [&]()->const GameResultInfo*{
+    const auto* g1 = [&]()->const ComparativeSimulator::GameResultInfo*{
         for (const auto& g : sim.groups) if (g.count == 1) return &g; return nullptr;
     }();
     ASSERT_NE(g1, nullptr);
@@ -150,7 +134,7 @@ TEST_F(ComparativeSimulatorUnitTest, MakeGroups_ClustersEqualResultsAndCounts) {
 
 TEST_F(ComparativeSimulatorUnitTest, PrintSatellite_RendersBoardWithNewlines) {
     std::ostringstream oss;
-    auto res = mkResult(1, 0, 3, {"ab", "cd", "ef"});
+    auto res = mkResult(1, 0, 3, rows({"ab", "cd", "ef"}));
     sim.printSatellite(oss, res);
     EXPECT_EQ(oss.str(), "ab\ncd\nef\n");
 }
@@ -160,24 +144,20 @@ TEST_F(ComparativeSimulatorUnitTest, PrintSatellite_RendersBoardWithNewlines) {
 TEST_F(ComparativeSimulatorUnitTest, BuildOutputBuffer_FormatsHeadersAndGroups) {
     // Prepare groups vector (already “grouped”)
     sim.groups.clear();
-    // Two groups: counts 1 and 3 — note writeOutput sorts ascending then pops back,
-    // so BuildOutputBuffer will emit the group with higher count last pushed if we mimic that.
-    // We’ll just set them directly and not rely on sort here.
-    GameResultInfo gA;
-    gA.result = mkResult(1, 7, 12, {"AA", "BB"});
+    // Two groups: counts 1 and 3 — note writeOutput sorts ascending then pops back.
+    ComparativeSimulator::GameResultInfo gA;
+    gA.result = mkResult(1, 7, 12, rows({"AA", "BB"}));
     gA.gm_names = {"GM_Z", "GM_Y"};
     gA.count = 3; // frequent
 
-    GameResultInfo gB;
-    gB.result = mkResult(2, 9, 20, {"**"});
+    ComparativeSimulator::GameResultInfo gB;
+    gB.result = mkResult(2, 9, 20, rows({"**"}));
     gB.gm_names = {"GM_X"};
     gB.count = 1; // less frequent
 
-    // Emulate writeOutput behavior: after sort ascending, it pops back (highest count) first.
-    // To test BuildOutputBuffer alone, we push them in ascending order then pop_back in BuildOutputBuffer loop:
-    // BuildOutputBuffer itself consumes groups by popping back until empty.
-    sim.groups.push_back(gB); // count=1 (first in vector)
-    sim.groups.push_back(gA); // count=3 (last in vector -> emitted first)
+    // Emulate writeOutput behavior: ascending sort then pop_back
+    sim.groups.push_back(gB); // count=1
+    sim.groups.push_back(gA); // count=3 (emitted first)
 
     const std::string mapPath = "/maps/demo.map";
     const std::string algo1   = "/algos/A1.so";
@@ -201,8 +181,7 @@ TEST_F(ComparativeSimulatorUnitTest, BuildOutputBuffer_FormatsHeadersAndGroups) 
     EXPECT_NE(buf.find("Winner: 2, Reason: 9\n20\n"), std::string::npos);
     EXPECT_NE(buf.find("**\n"), std::string::npos);
 
-    // There should be a blank line between groups (BuildOutputBuffer writes '\n' when groups remain)
-    // We can check there are at least two "Winner:" occurrences
+    // There should be at least two "Winner:" occurrences
     size_t countWinner = 0;
     for (size_t pos = 0; (pos = buf.find("Winner:", pos)) != std::string::npos; ++pos) ++countWinner;
     EXPECT_GE(countWinner, 2u);
@@ -216,9 +195,9 @@ TEST_F(ComparativeSimulatorUnitTest, WriteOutput_CreatesFileAndWritesSortedGroup
     sim.allResults.clear();
 
     // Make results: two identical (GM_A, GM_B) and one different (GM_C)
-    auto R1 = mkResult(1, 2, 100, {"..", "##"});
-    auto R2 = mkResult(1, 2, 100, {"..", "##"}); // same
-    auto R3 = mkResult(0, 0, 5,   {"xo"});
+    auto R1 = mkResult(1, 2, 100, rows({"..", "##"}));
+    auto R2 = mkResult(1, 2, 100, rows({"..", "##"})); // same
+    auto R3 = mkResult(0, 0,   5,   rows({"xo"}));
 
     sim.allResults.emplace_back(R1, "GM_A");
     sim.allResults.emplace_back(R2, "GM_B");
