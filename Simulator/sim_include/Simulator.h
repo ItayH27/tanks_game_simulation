@@ -18,6 +18,10 @@ using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair
 class Simulator {
 public:
     Simulator(bool verbose, size_t numThreads);
+    Simulator(const Simulator&) = delete;
+    Simulator& operator=(const Simulator&) = delete;
+    Simulator(Simulator&&) = delete;
+    Simulator& operator=(Simulator&&) = delete;
     virtual ~Simulator() = default;
 
 protected:

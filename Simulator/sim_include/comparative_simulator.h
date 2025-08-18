@@ -17,6 +17,10 @@ using std::string, std::filesystem::path, std::shared_ptr, std::vector, std::uno
 class ComparativeSimulator : public Simulator {
 public:
     ComparativeSimulator(bool verbose, size_t numThreads);
+    ComparativeSimulator(const ComparativeSimulator&) = delete;
+    ComparativeSimulator& operator=(const ComparativeSimulator&) = delete;
+    ComparativeSimulator(ComparativeSimulator&&) = delete;
+    ComparativeSimulator& operator=(ComparativeSimulator&&) = delete;
     ~ComparativeSimulator();
 
     int run(const string& mapPath,
