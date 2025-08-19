@@ -113,8 +113,9 @@ int ComparativeSimulator::run(const string& mapPath,
  * @return true if the shared object was successfully loaded, false otherwise.
  */
 bool ComparativeSimulator::loadAlgoSO(const string& path) {
+    auto absPath = std::filesystem::absolute(path);
     algo_registrar->createAlgorithmFactoryEntry(path);
-    void* handle = dlopen(path.c_str(), RTLD_LAZY);
+    void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
@@ -137,8 +138,9 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
  */
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
     lock_guard<mutex> lock(gmRegistrarmutex_);
+    auto absPath = std::filesystem::absolute(path);
     game_manager_registrar->createEntry(path);
-    void* handle = dlopen(path.c_str(), RTLD_LAZY);
+    void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
         lock_guard<mutex> lock(stderrMutex_);
         const char* error = dlerror();
