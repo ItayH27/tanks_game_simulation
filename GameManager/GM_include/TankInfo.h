@@ -6,7 +6,7 @@
 # include <utility>
 
 using std::move, std::unique_ptr;
-
+using namespace UserCommon_209277367_322542887;
 class TankInfo {
 public:
     // Rule of five:
@@ -27,7 +27,7 @@ public:
     int getTurnsToBackwards() const; // Get turns to backwards
     bool isMovingBackwards() const; // Get backwards flag
     bool justMovedBackwards() const; // Get just moved backwards flag
-    Direction getDirection() const; // Get tank direction
+    UserCommon_209277367_322542887::Direction getDirection() const; // Get tank direction
     int getIsAlive() const; // Get alive flag
 
     void setDirection(Direction dir); // Set tank direction 

@@ -5,7 +5,7 @@
 
 using std::vector;
 
-// class GM_209277367_322542887; // Forward declaration of GameManager class
+namespace UserCommon_209277367_322542887 {
 
 class ExtSatelliteView final : public SatelliteView {
     size_t width_;
@@ -24,3 +24,5 @@ class ExtSatelliteView final : public SatelliteView {
         // API function to get an object at a specific location
         char getObjectAt(size_t x, size_t y) const override;
 };
+
+} // namespace UserCommon_209277367_322542887
