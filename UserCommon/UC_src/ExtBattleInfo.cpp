@@ -2,6 +2,8 @@
 
 #include <utility>
 
+namespace UserCommon_209277367_322542887 {
+
 // Constructor
 ExtBattleInfo::ExtBattleInfo(const vector<vector<char>>& gameboard, const vector<pair<int,int>>& shells_location,
     const int num_shells, pair<int, int> initial_loc)
@@ -26,3 +28,5 @@ int ExtBattleInfo::getInitialAmmo() const { return initialAmmo_; }
 void ExtBattleInfo::setCurrAmmo(const int ammo) { currAmmo_ = ammo; }
 
 void ExtBattleInfo::setTankIndex(const int tank_index) { this->tankIndex_ = tank_index; }
+
+} // namespace UserCommon_209277367_322542887

@@ -5,6 +5,8 @@
 
 using std::pair, std::map;
 
+namespace UserCommon_209277367_322542887 {
+
 enum class Direction { U, UR, R, DR, D, DL, L, UL };
 
 // Mapping of directions to their respective coordinate changes
@@ -19,6 +21,7 @@ static const map<Direction, std::pair<int, int>> directionMap = {
     {Direction::UL, {-1, -1}}
 };
 
+} // namespace UserCommon_209277367_322542887
 
 // Based on the following grid system:
 // 0----------------------------------→ x

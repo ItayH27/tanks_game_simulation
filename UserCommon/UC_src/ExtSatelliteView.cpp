@@ -2,6 +2,8 @@
 
 #include <utility>
 
+namespace UserCommon_209277367_322542887 {
+
 // Constructor
 ExtSatelliteView::ExtSatelliteView(const size_t width, const size_t height, vector<vector<char>> map)
     : width_(width), height_(height), map_(std::move(map)) {}
@@ -14,3 +16,5 @@ char ExtSatelliteView::getObjectAt(const size_t x, const size_t y) const {
 
     return '&'; // Return a space character if out of bounds
 }
+
+} // namespace UserCommon_209277367_322542887

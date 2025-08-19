@@ -6,6 +6,8 @@
 
 using std::vector, std::pair;
 
+namespace UserCommon_209277367_322542887 {
+
 class ExtBattleInfo final : public BattleInfo {
     vector<vector<char>> currGameboard_;
     vector<pair<int,int>> shellLocations_;
@@ -36,3 +38,5 @@ class ExtBattleInfo final : public BattleInfo {
         void setTankIndex(int tank_index);
         void setCurrAmmo(int ammo);
 };
+
+} // namespace UserCommon_209277367_322542887

@@ -14,6 +14,7 @@
 #include <cmath>
 
 using std::pair, std::queue, std::vector, std::optional, std::abs, std::stack, std::sqrt;
+using namespace UserCommon_209277367_322542887;
 
 static constexpr int INF = std::numeric_limits<int>::max(); // infinity
 

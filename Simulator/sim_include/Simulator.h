@@ -14,6 +14,7 @@
 
 namespace fs = std::filesystem;
 using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair, std::tuple, std::tie, std::unique_ptr;
+using namespace UserCommon_209277367_322542887;
 
 class Simulator {
 public:

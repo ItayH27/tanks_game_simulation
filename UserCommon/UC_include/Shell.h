@@ -4,6 +4,8 @@
 
 using std::pair;
 
+namespace UserCommon_209277367_322542887 {
+
 class Shell {
         pair<int, int> location_;
         Direction direction_;
@@ -24,3 +26,5 @@ class Shell {
         void setAboveMine(bool above);
         void setLocation(int x, int y);
     };
+
+} // namespace UserCommon_209277367_322542887

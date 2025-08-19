@@ -34,6 +34,7 @@
 using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl, std::move;
 using TankIterator = std::vector<std::unique_ptr<TankInfo>>::iterator;
 using ShellIterator = std::vector<std::unique_ptr<Shell>>::iterator;
+using namespace UserCommon_209277367_322542887;
 namespace fs = std::filesystem;
 
 namespace GameManager_209277367_322542887 {
