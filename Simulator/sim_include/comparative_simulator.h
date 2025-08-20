@@ -24,9 +24,9 @@ public:
     ~ComparativeSimulator();
 
     int run(const string& mapPath,
+            const string& gmFolder,
             const string& algorithmSoPath1,
-            const string& algorithmSoPath2,
-            const string& gmFolder);
+            const string& algorithmSoPath2);
 private:
 
     vector<void*> algoHandles_;
@@ -71,6 +71,9 @@ private:
         snap.reason = gr.reason;
         snap.remaining_tanks = gr.remaining_tanks;
         snap.rounds = gr.rounds;
+        if (!gr.gameState) {
+            return snap; // Return empty snapshot
+        }
 
         snap.board.resize(rows, std::vector<char>(cols));
         for (size_t y = 0; y < rows; ++y) {
