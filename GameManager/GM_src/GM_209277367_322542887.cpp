@@ -863,7 +863,7 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
     player1TankFactory_ = player1_tank_algo_factory;
     player2TankFactory_ = player2_tank_algo_factory;
 
-    string logName = "output_" + map_name + "_GM_209277367_322542887_" + name1 + "_" + name2;
+    string logName = "output_" + map_name;
     gameLog_.open(logName, std::ios::out | std::ios::trunc);
     if (!gameLog_.is_open()) {
         std::cerr << "Failed to open log file: " << logName << endl;
