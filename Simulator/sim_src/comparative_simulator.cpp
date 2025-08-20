@@ -45,17 +45,6 @@ ComparativeSimulator::~ComparativeSimulator() {
     }
     algoHandles_.clear();
 }
-/**
- * @brief Runs the competitive simulation using the provided folders and GameManager.
- *
- * Loads the GameManager and all algorithm `.so` files, loads map files, schedules and runs games
- * according to the assignment's round-robin pairing scheme, and writes the results to an output file.
- *
- * @param mapsFolder Path to the folder containing game map files.
- * @param gameManagerSoPath Path to the compiled GameManager `.so` file.
- * @param algorithmsFolder Path to the folder containing compiled algorithm `.so` files.
- * @return int 0 on success, 1 on error.
- */
 
 /**
  * @brief Runs a comparative simulation between multiple game managers.
@@ -74,7 +63,6 @@ int ComparativeSimulator::run(const string& mapPath,
                               const string& gmFolder,
                               const string& algorithmSoPath1,
                               const string& algorithmSoPath2) {
-    
     mapData_ = readMap(mapPath);
     if (mapData_.failedInit) {
         std::cerr << "Error: failed to load the map data." << std::endl;
@@ -85,8 +73,9 @@ int ComparativeSimulator::run(const string& mapPath,
         std::cerr << "Error: failed to load one or both algorithms." << std::endl;
         return 1;
     }
-    algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->end() - 1));
-    algo2_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
+    algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
+    algo2_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->end() - 1));
+    
     
     if (!algo1_->hasPlayerFactory() || !algo2_->hasPlayerFactory() || 
         !algo1_->hasTankAlgorithmFactory() || !algo2_->hasTankAlgorithmFactory()) {
@@ -95,8 +84,10 @@ int ComparativeSimulator::run(const string& mapPath,
     }
 
     getGameManagers(gmFolder);
-    // loadGameManagers(gms_paths_);
-
+    if (gms_paths_.empty()) {
+        std::cerr << "Error: No GameManager shared libraries found in folder: " << gmFolder << std::endl;
+        return 1;
+    }
     runGames();
     writeOutput(mapPath, algorithmSoPath1, algorithmSoPath2, gmFolder);
 
@@ -230,7 +221,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
     {
         unique_ptr<AbstractGameManager> gameManager;
         string gm_name;
-
+        bool createdGameManager = false, createdFactory = false;
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
@@ -241,24 +232,29 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
 
         }
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
-        if (!gm.hasFactory()){
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: GameManager factory not found for: " << gm.name() << std::endl;
-            dlclose(gm_handle); // Close the GameManager shared object handle
-            return;
-        }
+        createdFactory = gm.hasFactory();
+        
 
         // Create the GameManager instance
         gameManager = gm.create(verbose_);
-        if (!gameManager) {
+        createdGameManager = (gameManager != nullptr);
+        
+
+        gm_name = gm.name();
+        }
+
+        if (!createdFactory){
+            lock_guard<mutex> lock(stderrMutex_);
+            std::cerr << "Error: GameManager factory not found for: " << gm_name << std::endl;
+            dlclose(gm_handle); // Close the GameManager shared object handle
+            return;
+        }
+        if (!createdGameManager) {
             lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
             return;
         }
 
-        gm_name = gm.name();
-
-        }
         // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         unique_ptr<Player> player2 = algo2_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
@@ -392,7 +388,9 @@ void ComparativeSimulator::printSatellite(std::ostream& os,
                            const SnapshotGameResult& result) {
     for (size_t y = 0; y < result.board.size(); ++y) {
         for (size_t x = 0; x < result.board[y].size(); ++x) {
-            os << result.board[y][x];
+            char cell = result.board[y][x];
+            if (cell == '$') cell = '#'; // $ is an internaly used char
+            os << cell;
         }
         os << "\n";
     }
@@ -400,9 +398,10 @@ void ComparativeSimulator::printSatellite(std::ostream& os,
 
 
 string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
-                                                 const string& algorithmSoPath1,
-                                                 const string& algorithmSoPath2) {
+                                               const string& algorithmSoPath1,
+                                               const string& algorithmSoPath2) {
     ostringstream oss;
+
     oss << "game_map=" << getFilename(mapPath) << "\n"
         << "algorithm1=" << getFilename(algorithmSoPath1) << "\n"
         << "algorithm2=" << getFilename(algorithmSoPath2) << "\n"
@@ -412,15 +411,33 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         auto group = groups.back();
         groups.pop_back();
 
-        for (size_t i = 0; i < group.gm_names.size()-1 ; i++) {
-            oss << group.gm_names[i] << ", ";
+        if (!group.gm_names.empty()) {
+            for (size_t i = 0; i + 1 < group.gm_names.size(); ++i) {
+                oss << group.gm_names[i] << ", ";
+            }
+            oss << group.gm_names.back() << "\n";
+        } else {
+            oss << "\n"; // defensive: keep shape even if no names
         }
-        oss << group.gm_names.back() << "\n"
-            << "Winner: " << group.result.winner << ", Reason: " << group.result.reason << "\n"
-            << group.result.rounds << endl;
+
+        oss << (
+            group.result.winner == 0
+            ? (group.result.reason == GameResult::ALL_TANKS_DEAD
+                ? "Tie, both players have zero tanks"
+                : group.result.reason == GameResult::MAX_STEPS
+                    ? "Tie, reached max steps = " + std::to_string(group.result.rounds) +
+                      ", player 1 has " + std::to_string(group.result.remaining_tanks[0]) +
+                      " tanks, player 2 has " + std::to_string(group.result.remaining_tanks[1]) + " tanks"
+                    : "Tie, both players have zero shells for 40 steps") // replace 40 with your constant if you have one
+            : "Player " + std::to_string(group.result.winner) + " won with " +
+              std::to_string(group.result.remaining_tanks[group.result.winner - 1]) + " tanks still alive"
+        ) << "\n";
+
+        oss << group.result.rounds << "\n";
 
         printSatellite(oss, group.result);
-        if (groups.size() > 0) {
+
+        if (!groups.empty()) {
             oss << "\n";
         }
     }
