@@ -59,6 +59,7 @@ int CompetitiveSimulator::run(const string& mapsFolder,
         cerr << "Usage: At least two algorithms must be present in folder: " << algorithmsFolder << endl;
         return 1;
     }
+    for (auto& [name, _] : algoNameToPath_) { scores_[name] = 0; } // Zero out scores for all algorithms
 
     // Load maps into vector
     vector<fs::path> maps;
