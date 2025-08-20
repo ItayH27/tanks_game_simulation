@@ -22,7 +22,14 @@ using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_itera
 ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
     : Simulator(verbose, numThreads) {
         algo_registrar = &AlgorithmRegistrar::getAlgorithmRegistrar();
+        if (!algo_registrar) {
+            throw std::runtime_error("Error: Failed to get AlgorithmRegistrar instance.");
+        }
+
         game_manager_registrar = &GameManagerRegistrar::getGameManagerRegistrar();
+        if (!game_manager_registrar) {
+            throw std::runtime_error("Error: Failed to get GameManagerRegistrar instance.");
+        }
 }
 
 
@@ -34,8 +41,12 @@ ComparativeSimulator::~ComparativeSimulator() {
     algo1_.reset();
     algo2_.reset();
 
-    game_manager_registrar->clear(); // Clear the GameManager registrar
-    algo_registrar->clear(); // Clear the Algorithm registrar
+    if (game_manager_registrar) {
+        game_manager_registrar->clear();
+    }
+    if (algo_registrar) {
+        algo_registrar->clear();
+    }
 
     lock_guard<mutex> lock(handlesMutex_);
     for (auto& handle : algoHandles_) {
@@ -105,9 +116,16 @@ int ComparativeSimulator::run(const string& mapPath,
  */
 bool ComparativeSimulator::loadAlgoSO(const string& path) {
     auto absPath = std::filesystem::absolute(path);
+
+    if (!algo_registrar) {
+        std::cerr << "Error: Algorithm registrar is null\n";
+        return false;
+    }
     algo_registrar->createAlgorithmFactoryEntry(path);
+    
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
+        if (algo_registrar) { algo_registrar->removeLast(); } //Rollback
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
         std::cerr << (error ? error : "Unknown error") << "\n";
@@ -130,9 +148,17 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
     lock_guard<mutex> lock(gmRegistrarmutex_);
     auto absPath = std::filesystem::absolute(path);
+
+    if (!game_manager_registrar) {
+        lock_guard<mutex> lock(stderrMutex_);
+        std::cerr << "Error: Game manager registrar is null\n";
+        return nullptr;
+    }
     game_manager_registrar->createEntry(path);
+
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
+        game_manager_registrar->removeLast(); // Rollback the last entry
         lock_guard<mutex> lock(stderrMutex_);
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
@@ -225,10 +251,10 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
-        if (game_manager_registrar->empty()) {
+        if (!game_manager_registrar || game_manager_registrar->empty()) {
             std::cerr << "Error: Registrar is empty\n";
             dlclose(gm_handle);
-            return;
+            return; 
 
         }
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
@@ -252,6 +278,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         if (!createdGameManager) {
             lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
+            dlclose(gm_handle); // Close the GameManager shared object handle
             return;
         }
 
@@ -261,6 +288,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         if (!player1 || !player2) {
             lock_guard<mutex> lock(stderrMutex_);
             std::cerr << "Error: Failed to create players from algorithms." << std::endl;
+            dlclose(gm_handle); // Close the GameManager shared object handle
             return;
         }
 
@@ -281,7 +309,14 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         // Store the result in allResults
         {
         lock_guard<mutex> lock(allResultsMutex_);
-        allResults.emplace_back(makeSnapshot(result,mapData_.rows, mapData_.cols), gm_name);
+        SnapshotGameResult snap = makeSnapshot(result, mapData_.rows, mapData_.cols);
+        if (snap.board.empty()) {
+            lock_guard<mutex> lock(stderrMutex_);
+            std::cerr << "Error: Empty board in GameResult for GameManager: " << gm_name << std::endl;
+            dlclose(gm_handle); // Close the GameManager shared object handle
+            return;
+        } 
+        allResults.emplace_back(snap, gm_name);
         }
     
         lock_guard<mutex> lock(gmRegistrarmutex_);
@@ -374,7 +409,7 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
 
     // If file didn't open, print error and the output buffer
     if (!outFile) {
-        printf("Error: failed to open output file.\n");
+        cerr << "Error: failed to open output file." << endl;
         printf("%s\n", outputBuffer.c_str());
         return;
     }
