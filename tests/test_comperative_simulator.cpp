@@ -381,3 +381,96 @@ TEST(E2E_Comparative, RunFull) {
     EXPECT_TRUE(std::regex_search(contents, winRe))
         << "No winner/reason block found.\n" << contents;
 }
+
+// ===================== Check cerr =====================
+// RAII class to capture std::cerr
+class CerrCapture {
+public:
+    CerrCapture() : old_buf(std::cerr.rdbuf(capture.rdbuf())) {}
+    ~CerrCapture() { std::cerr.rdbuf(old_buf); }
+    std::string str() const { return capture.str(); }
+private:
+    std::ostringstream capture;
+    std::streambuf* old_buf;
+};
+
+class ComparativeSimulatorCerrTest : public ::testing::Test {
+protected:
+    ComparativeSimulator sim{true, 1}; // verbose = true, 1 thread
+};
+
+// Test failed map load
+TEST_F(ComparativeSimulatorCerrTest, RunFailsOnBadMap) {
+    CerrCapture capture;
+    int rc = sim.run("/non/existent/map.txt", ".", "algo1.so", "algo2.so");
+    std::string output = capture.str();
+
+    EXPECT_EQ(rc, 1);
+    EXPECT_NE(output.find("Error: failed to load the map data."), std::string::npos);
+}
+
+// Test failed algorithm load
+TEST_F(ComparativeSimulatorCerrTest, LoadAlgoSOPrintsError) {
+    CerrCapture capture;
+    bool rc = sim.loadAlgoSO("/non/existent/algo.so");
+    std::string output = capture.str();
+
+    EXPECT_FALSE(rc);
+    EXPECT_NE(output.find("Failed loading .so file from path"), std::string::npos);
+}
+
+// Test missing GameManager registrar
+TEST_F(ComparativeSimulatorCerrTest, LoadGameManagerSONullRegistrar) {
+    CerrCapture capture;
+
+    // Temporarily set registrar to nullptr
+    auto* old = sim.game_manager_registrar;
+    sim.game_manager_registrar = nullptr;
+
+    void* handle = sim.loadGameManagerSO("fake.so");
+    std::string output = capture.str();
+
+    EXPECT_EQ(handle, nullptr);
+    EXPECT_NE(output.find("Error: Game manager registrar is null"), std::string::npos);
+
+    sim.game_manager_registrar = old; // restore
+}
+
+// Test errorHandle prints message
+TEST_F(ComparativeSimulatorCerrTest, ErrorHandlePrintsMessage) {
+    CerrCapture capture;
+    void* fakeHandle = nullptr;
+
+    bool result = sim.errorHandle(true, "Custom error: ", fakeHandle, "GM_FAKE");
+    std::string output = capture.str();
+
+    EXPECT_TRUE(result);
+    EXPECT_NE(output.find("Custom error: GM_FAKE"), std::string::npos);
+}
+
+// Test writeOutput fails to open file
+TEST_F(ComparativeSimulatorCerrTest, WriteOutputFileFail) {
+    CerrCapture capture;
+
+    // Pass an invalid folder to trigger file open failure
+    sim.writeOutput("map.txt", "algo1.so", "algo2.so", "/non/existent/folder");
+
+    std::string output = capture.str();
+    EXPECT_NE(output.find("Error: failed to open output file."), std::string::npos);
+}
+
+// Test getGameManagers with empty folder
+TEST_F(ComparativeSimulatorCerrTest, GetGameManagersEmptyFolder) {
+    CerrCapture capture;
+
+    // Make a real temporary empty folder
+    std::filesystem::path tmp = std::filesystem::temp_directory_path() / "empty_folder";
+    std::filesystem::create_directories(tmp);
+
+    sim.getGameManagers(tmp.string());
+    std::string output = capture.str();
+
+    EXPECT_TRUE(sim.gms_paths_.empty());
+
+    std::filesystem::remove(tmp); // clean up
+}
