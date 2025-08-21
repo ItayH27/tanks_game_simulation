@@ -8,6 +8,7 @@
 #include <chrono>
 #include <iomanip>
 #include <filesystem>
+#include <unordered_set>
 #include <condition_variable>
 #include "GameManagerRegistrar.h"
 #include "../sim_include/Simulator.h"
@@ -170,30 +171,70 @@ bool CompetitiveSimulator::loadMaps(const string& folder, vector<fs::path>& outM
  *
  * @param maps List of map file paths to use in scheduling games.
  */
+// void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
+//     std::vector<std::string> algoNames;
+//     algoNames.reserve(algoNameToPath_.size());
+//     for (const auto& [name, _] : algoNameToPath_) algoNames.push_back(name);
+
+//     const size_t N = algoNames.size();
+//     const size_t R = N - 1;
+
+//     for (size_t k = 0; k < maps.size(); ++k) {
+//         const size_t r = k % R;
+//         const bool evenN_middle_round = (N % 2 == 0) && (r == N/2 - 1);
+
+//         for (size_t i = 0; i < N; ++i) {
+//             size_t j = (i + 1 + r) % N;
+            
+//             // Skip duplicate pairs (when j has already played against i)
+//             if (i >= j) continue;
+            
+//             // Schedule i vs j
+//             scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
+//             ++algoUsageCounts_[algoNames[i]];
+//             ++algoUsageCounts_[algoNames[j]];
+
+//             // Add mirror game unless it's the symmetric round
+//             if (!evenN_middle_round) {
+//                 scheduledGames_.push_back({maps[k], algoNames[j], algoNames[i]});
+//                 ++algoUsageCounts_[algoNames[i]];
+//                 ++algoUsageCounts_[algoNames[j]];
+//             }
+//         }
+//     }
+// }
 void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
+    // Collect algo names in the container's natural iteration order (no sorting).
     std::vector<std::string> algoNames;
     algoNames.reserve(algoNameToPath_.size());
-    for (const auto& [name, _] : algoNameToPath_) algoNames.push_back(name);
+    for (const auto& kv : algoNameToPath_) {
+        algoNames.push_back(kv.first);
+    }
 
     const size_t N = algoNames.size();
-    const size_t R = N - 1;
+    if (N < 2) return;
+
+    const size_t R = N - 1; // used for k % (N-1)
+
+    auto keyOf = [](uint32_t a, uint32_t b) -> uint64_t {
+        if (a > b) std::swap(a, b);
+        return (static_cast<uint64_t>(a) << 32) | b;
+    };
 
     for (size_t k = 0; k < maps.size(); ++k) {
-        const size_t r = k % R;
-        const bool evenN_middle_round = (N % 2 == 0) && (r == N/2 - 1);
+        const auto& map = maps[k];
 
-        for (size_t i = 0; i < N; ++i) {
-            size_t j = (i + 1 + r) % N;
-            if (i >= j) continue; // avoid duplicate unordered pairs
+        // Dedup unordered pairs per map (handles the even-N middle "symmetric" case)
+        std::unordered_set<uint64_t> seen;
 
-            // Always schedule i vs j
-            scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
-            ++algoUsageCounts_[algoNames[i]];
-            ++algoUsageCounts_[algoNames[j]];
+        const uint32_t shift = static_cast<uint32_t>(k % R); // r = k % (N-1)
+        for (uint32_t i = 0; i < static_cast<uint32_t>(N); ++i) {
+            const uint32_t j = (i + 1 + shift) % static_cast<uint32_t>(N);
 
-            // Add mirror game unless it's the symmetric round
-            if (!evenN_middle_round) {
-                scheduledGames_.push_back({maps[k], algoNames[j], algoNames[i]});
+            const uint64_t key = keyOf(i, j);
+            if (seen.insert(key).second) {
+                // Schedule one direction only (no mirroring).
+                scheduledGames_.push_back({ map, algoNames[i], algoNames[j] });
                 ++algoUsageCounts_[algoNames[i]];
                 ++algoUsageCounts_[algoNames[j]];
             }
