@@ -91,7 +91,7 @@ TEST_F(CompetitiveSimulatorTest, LoadMaps_EmptyFolderReturnsFalse) {
 
 // ---------- scheduleGames ----------
 
-TEST_F(CompetitiveSimulatorTest, ScheduleGames_OddN_MirrorsAllPairs) {
+TEST_F(CompetitiveSimulatorTest, ScheduleGames_OddN_AllPairsOnce) {
     // Prepare 3 algorithms (odd N)
     sim.algoNameToPath_.clear();
     sim.algoUsageCounts_.clear();
@@ -110,15 +110,15 @@ TEST_F(CompetitiveSimulatorTest, ScheduleGames_OddN_MirrorsAllPairs) {
 
     sim.scheduleGames(maps);
 
-    // For N=3, unordered pairs = 3 (AB, AC, BC), each mirrored → 6 games per map
-    EXPECT_EQ(sim.scheduledGames_.size(), 6u);
+    // For N=3: A-B, B-C, C-A → 3 games (no mirroring)
+    EXPECT_EQ(sim.scheduledGames_.size(), 3u);
 
-    // Each algorithm appears in 4 games per map (plays 2 opponents, mirrored)
-    EXPECT_EQ(sim.algoUsageCounts_["A"], 4);
-    EXPECT_EQ(sim.algoUsageCounts_["B"], 4);
-    EXPECT_EQ(sim.algoUsageCounts_["C"], 4);
+    // Each algo plays twice (faces two opponents once each)
+    EXPECT_EQ(sim.algoUsageCounts_["A"], 2);
+    EXPECT_EQ(sim.algoUsageCounts_["B"], 2);
+    EXPECT_EQ(sim.algoUsageCounts_["C"], 2);
 
-    // Sanity: ensure we scheduled both directions for a pair
+    // Sanity: A–B appears exactly once across directions
     int ab = 0;
     for (auto& g : sim.scheduledGames_) {
         if ((g.algoName1 == "A" && g.algoName2 == "B") ||
@@ -126,7 +126,7 @@ TEST_F(CompetitiveSimulatorTest, ScheduleGames_OddN_MirrorsAllPairs) {
             ++ab;
         }
     }
-    EXPECT_EQ(ab, 2); // mirrored
+    EXPECT_EQ(ab, 1);
 }
 
 TEST_F(CompetitiveSimulatorTest, ScheduleGames_EvenN_SkipMirrorOnMiddleRound) {
@@ -147,22 +147,22 @@ TEST_F(CompetitiveSimulatorTest, ScheduleGames_EvenN_SkipMirrorOnMiddleRound) {
 
     sim.scheduleGames(maps);
 
-    // For N=4, unordered pairs = 6.
-    // r=0: mirror on → 12 games
-    // r=1: mirror off → 6 games
-    // r=2: mirror on → 12 games
-    // Total = 30
-    EXPECT_EQ(sim.scheduledGames_.size(), 30u);
+    // For N=4:
+    // r=0: 2 pairs, mirror on → 4 games
+    // r=1: 2 pairs, mirror off → 2 games
+    // r=2: 2 pairs, mirror on → 4 games
+    // Total = 10
+    EXPECT_EQ(sim.scheduledGames_.size(), 10u);
 
     // Per algorithm:
-    // r=0: plays 3 opponents * 2 = 6
-    // r=1: plays 3 opponents * 1 = 3
-    // r=2: plays 3 opponents * 2 = 6
-    // Total = 15
-    EXPECT_EQ(sim.algoUsageCounts_["A"], 15);
-    EXPECT_EQ(sim.algoUsageCounts_["B"], 15);
-    EXPECT_EQ(sim.algoUsageCounts_["C"], 15);
-    EXPECT_EQ(sim.algoUsageCounts_["D"], 15);
+    // r=0: plays 1 opponent * 2 = 2
+    // r=1: plays 1 opponent * 1 = 1
+    // r=2: plays 1 opponent * 2 = 2
+    // Total = 5
+    EXPECT_EQ(sim.algoUsageCounts_["A"], 5);
+    EXPECT_EQ(sim.algoUsageCounts_["B"], 5);
+    EXPECT_EQ(sim.algoUsageCounts_["C"], 5);
+    EXPECT_EQ(sim.algoUsageCounts_["D"], 5);
 }
 
 // ---------- updateScore ----------

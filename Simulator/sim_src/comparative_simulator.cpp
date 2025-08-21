@@ -170,7 +170,19 @@ void* ComparativeSimulator::loadGameManagerSO(const string& path) {
     return handle;
 }
 
-
+/**
+ * @brief Scans a folder for GameManager shared libraries and records their paths.
+ *
+ * Iterates over all directory entries under @p gameManagerFolder and collects the
+ * absolute paths of files with the ".so" extension. Only regular files ending with
+ * ".so" are considered. The discovered paths are appended to the internal list
+ * @c gms_paths_ without clearing it first.
+ *
+ * @note The filesystem iteration order is implementation-defined; no sorting is applied.
+ * @note This function does not attempt to dlopen or validate the binary beyond the extension.
+ *
+ * @param gameManagerFolder Path to the directory that is expected to contain GameManager .so files.
+ */
 void ComparativeSimulator::getGameManagers(const string& gameManagerFolder) {
     for (const auto& entry : directory_iterator(gameManagerFolder)) { // Check each entry in the directory
         if (entry.path().extension() == ".so") { // We care only about .so files
@@ -415,7 +427,19 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
     outFile.close();
 }
 
-
+/**
+ * @brief Renders a snapshot of the final board to an output stream.
+ *
+ * Prints the 2D board stored in @p result.board to @p os, row by row, followed by '\n'.
+ * The character '$' is an internal sentinel and is replaced with '#' before printing
+ * to keep the output user-facing and consistent with the expected file format.
+ *
+ * @param os Output stream to write the board to (e.g., a file or std::cout).
+ * @param result Snapshot of a single game's final state, including a @c board matrix.
+ *
+ * @pre @p result.board is a rectangular grid (all rows have identical length).
+ * @post The stream @p os is advanced by the full board plus trailing newlines.
+ */
 void ComparativeSimulator::printSatellite(std::ostream& os,
                            const SnapshotGameResult& result) {
     for (size_t y = 0; y < result.board.size(); ++y) {
@@ -428,7 +452,37 @@ void ComparativeSimulator::printSatellite(std::ostream& os,
     }
 }
 
-
+/**
+ * @brief Builds the full comparative results buffer for all game-manager groups.
+ *
+ * Produces the text that should be written to the comparative results file, adhering to
+ * the assignment’s output spec. The buffer starts with:
+ *
+ *   1) "game_map=<file_name>\n"
+ *   2) "algorithm1=<file_name>\n"
+ *   3) "algorithm2=<file_name>\n"
+ *   4) blank line
+ *
+ * Then, for each remaining group in @c groups (processed in LIFO order), this function appends:
+ *   - A comma-separated list of GameManager names that achieved the identical final result.
+ *   - A human-readable result line (winner/tie and reason), derived from @c group.result.
+ *   - The round number in which the game finished.
+ *   - A full map of the final state via @c printSatellite(...).
+ *   - A blank line between groups (but not after the last).
+ *
+ * @warning This function consumes @c groups by repeatedly calling @c pop_back(); after it returns,
+ *          @c groups will be empty. If you need the groups later, make a copy before calling.
+ *
+ * @param mapPath Absolute or relative path to the game map; only the filename is printed.
+ * @param algorithmSoPath1 Path to the first algorithm’s shared object; only the filename is printed.
+ * @param algorithmSoPath2 Path to the second algorithm’s shared object; only the filename is printed.
+ *
+ * @return A single string containing the entire formatted output, ready to be written to file.
+ *
+ * @note File names are extracted using @c getFilename(...). The tie/win message formatting matches
+ *       the assignment requirements (including the special-case replacement of '$' in the board).
+ * @note The helper @c tanksOrZero(...) defensively handles missing indices in @c remaining_tanks.
+ */
 string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
                                                const string& algorithmSoPath1,
                                                const string& algorithmSoPath2) {

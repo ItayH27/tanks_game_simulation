@@ -23,6 +23,17 @@ namespace {
         "game_maps_folder", "game_manager", "algorithms_folder", "num_threads"
     };
 
+    /**
+     * @brief Verifies that all provided argument keys are valid for the current mode.
+     *
+     * Iterates over the provided key-value arguments and ensures that each key
+     * appears in the given list of valid keys. If any unrecognized key is found,
+     * an error message is appended to the errors vector.
+     *
+     * @param args Map of parsed arguments (key=value pairs from the command line).
+     * @param validKeys List of keys considered valid for the current run mode.
+     * @param errors Vector to collect error messages describing invalid arguments.
+     */
     void checkInvalidKeys(const std::unordered_map<std::string, std::string>& args, 
                         const std::vector<std::string>& validKeys,
                         std::vector<std::string>& errors) {
@@ -34,6 +45,16 @@ namespace {
     }
 
     // ---- small utils ----
+
+    /**
+     * @brief Removes leading and trailing whitespace characters from a string.
+     *
+     * Uses std::isspace to trim both ends of the string in-place and returns
+     * the cleaned version. Intended for sanitizing raw tokens before further parsing.
+     *
+     * @param s Input string to trim.
+     * @return A string with whitespace removed from both beginning and end.
+     */
     inline std::string trim(std::string s) {
         auto issp = [](unsigned char c){ return std::isspace(c); };
         s.erase(s.begin(), std::find_if_not(s.begin(), s.end(), issp));
@@ -41,17 +62,47 @@ namespace {
         return s;
     }
 
+    /**
+     * @brief Checks whether the given path points to an existing regular file.
+     *
+     * Performs a safe check (ignores filesystem errors) to ensure that the path
+     * exists and is classified as a file. This is used to validate command line
+     * arguments that should refer to files such as maps or algorithms.
+     *
+     * @param path Path to check on the filesystem.
+     * @return True if the path exists and is a regular file, false otherwise.
+     */
     inline bool isFileValid(const std::string& path) {
         std::error_code ec;
         return fs::exists(path, ec) && fs::is_regular_file(path, ec);
     }
 
+    /**
+     * @brief Checks whether the given path points to a valid, non-empty directory.
+     *
+     * Performs a safe check (ignores filesystem errors) to ensure that the path
+     * exists, is a directory, and is not empty. This is used to validate folders
+     * containing managers, maps, or algorithms.
+     *
+     * @param path Path to check on the filesystem.
+     * @return True if the path exists, is a directory, and has at least one entry.
+     */
     inline bool isFolderValid(const std::string& path) {
         std::error_code ec;
         return fs::exists(path, ec) && fs::is_directory(path, ec) && !fs::is_empty(path, ec);
     }
 
-    // Parse num_threads strictly: digits only, integer >= 1. Default = 1 when absent.
+    /**
+     * @brief Parses and validates the "num_threads" argument strictly.
+     *
+     * Ensures that the argument value is a positive integer consisting of digits only.
+     * Defaults to 1 if the argument is missing. If the provided value is invalid,
+     * returns false without modifying the output parameter.
+     *
+     * @param kv Map of parsed key-value arguments.
+     * @param out Reference to an integer that receives the parsed thread count.
+     * @return True if parsing succeeds, false otherwise.
+     */
     static bool parseNumThreadsStrict(const std::unordered_map<std::string,std::string>& kv, int& out) {
         auto it = kv.find("num_threads");
         if (it == kv.end()) { out = 1; return true; }
@@ -81,6 +132,18 @@ namespace {
         bool verbose = false;
     };
 
+    /**
+     * @brief Normalizes raw command-line arguments into structured form.
+     *
+     * Handles tokens with different formats: "key=value", "key =", "key = value",
+     * as well as mode switches like "-comparative", "-competition", and "-verbose".
+     * Collects unsupported or malformed arguments, detects duplicates, and outputs
+     * a normalized representation ready for validation.
+     *
+     * @param argc Number of command-line arguments.
+     * @param argv Array of argument strings.
+     * @return A NormalizedArgs struct containing parsed arguments, switches, and errors.
+     */
     static NormalizedArgs normalizeArgs(int argc, char** argv) {
         NormalizedArgs out;
         std::unordered_map<std::string,int> seen;
@@ -187,7 +250,17 @@ namespace {
         return out;
     }
 
-    // Validate paths and populate result for comparative mode. num_threads has been validated/set earlier.
+    /**
+     * @brief Validates and extracts arguments required for comparative mode.
+     *
+     * Checks that all required arguments ("game_map", "game_managers_folder",
+     * "algorithm1", "algorithm2") are provided and point to valid files/folders.
+     * On success, populates the ParseResult with validated values.
+     *
+     * @param args Map of parsed key-value arguments.
+     * @param out ParseResult object to populate with extracted values.
+     * @return A ParseResult object, marked valid if all checks pass, invalid otherwise.
+     */
     ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
         static const std::vector<std::string> required = {
             "game_map", "game_managers_folder", "algorithm1", "algorithm2"
@@ -214,7 +287,17 @@ namespace {
         return out;
     }
 
-    // Validate paths and populate result for competition mode. num_threads has been validated/set earlier.
+    /**
+     * @brief Validates and extracts arguments required for competition mode.
+     *
+     * Checks that all required arguments ("game_maps_folder", "game_manager",
+     * "algorithms_folder") are provided and point to valid files/folders.
+     * On success, populates the ParseResult with validated values.
+     *
+     * @param args Map of parsed key-value arguments.
+     * @param out ParseResult object to populate with extracted values.
+     * @return A ParseResult object, marked valid if all checks pass, invalid otherwise.
+     */
     ParseResult validateCompetition(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
         static const std::vector<std::string> required = {
             "game_maps_folder", "game_manager", "algorithms_folder"
@@ -239,6 +322,30 @@ namespace {
     }
 } // namespace
 
+/**
+ * @brief Parses command-line arguments and validates them according to mode.
+ *
+ * Supports two modes of operation:
+ *   - Comparative mode (`-comparative`): requires arguments
+ *     game_map, game_managers_folder, algorithm1, and algorithm2.
+ *   - Competition mode (`-competition`): requires arguments
+ *     game_maps_folder, game_manager, and algorithms_folder.
+ *
+ * Also handles optional arguments:
+ *   - num_threads (must be a positive integer, default = 1)
+ *   - -verbose flag for verbose output
+ *
+ * The parser reports and fails on:
+ *   - Missing required arguments
+ *   - Unsupported or malformed arguments
+ *   - Invalid file/folder paths
+ *   - Duplicate keys
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Array of argument strings.
+ * @return A ParseResult object populated with mode, arguments, and validation state.
+ *         If parsing fails, the object is marked invalid with an error message.
+ */
 CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
     ParseResult res;
     res.mode = Mode::None;
@@ -295,6 +402,14 @@ CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
         : validateCompetition(nz.kv, res);
 }
 
+
+/**
+ * @brief Prints usage instructions for the simulator program.
+ *
+ * Displays the expected command-line syntax for both comparative
+ * and competition modes, including required and optional arguments.
+ * Intended for use when arguments are missing, invalid, or unsupported.
+ */
 void CmdParser::printUsage() {
     std::cout
         << "Usage:\n"

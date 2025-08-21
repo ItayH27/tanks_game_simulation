@@ -13,7 +13,7 @@ cmake -S . -B build && cmake --build build -j
 
 ./simulator_209277367_322542887 -competition \
     game_maps_folder=1_maps \
-    game_manager=1_gm_so/GameManager_209277367_322542887.so \
+    game_manager=1_gm_so/GameManager_test_209277367_322542887.so \
     algorithms_folder=1_algo_so \
     num_threads=4 -verbose
 
@@ -147,6 +147,35 @@ launch:
         }
     ]
 }
+
+{
+  "name": "Tanks Dev (x86_64)",
+  "build": {
+    "context": ".",
+    "dockerfile": "../tanks_game_simulation/Dockerfile"
+  },
+  "runArgs": [
+    "--cap-add=SYS_PTRACE",
+    "--security-opt=seccomp=unconfined"
+  ],
+
+  // Mount ONLY the repo root into /workspace inside the container
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+
+  "containerEnv": {
+    "LD_LIBRARY_PATH": "/workspace/1_gm_so:/workspace/1_algo_so"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cpptools", "ms-vscode.cmake-tools"]
+    }
+  },
+
+  "remoteUser": "root"
+}
+
 
 
 VSCode build:
