@@ -116,12 +116,13 @@ int ComparativeSimulator::run(const string& mapPath,
  */
 bool ComparativeSimulator::loadAlgoSO(const string& path) {
     auto absPath = std::filesystem::absolute(path);
+    string soName = absPath.stem().string();
 
     if (!algo_registrar) {
         std::cerr << "Error: Algorithm registrar is null\n";
         return false;
     }
-    algo_registrar->createAlgorithmFactoryEntry(path);
+    algo_registrar->createAlgorithmFactoryEntry(soName);
     
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
@@ -241,9 +242,8 @@ void ComparativeSimulator::runGames() {
 void ComparativeSimulator::runSingleGame(const path& gmPath) {
     // load .so file for Game Manager
     void* gm_handle = loadGameManagerSO(gmPath);
-    if (!gm_handle) {
-        return;
-    }
+    if (errorHandle(!gm_handle, "Failed to load GameManager .so file: ", gm_handle, gmPath.string())) { return; }
+   
     {
         unique_ptr<AbstractGameManager> gameManager;
         string gm_name;
@@ -251,45 +251,27 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
-        if (!game_manager_registrar || game_manager_registrar->empty()) {
-            std::cerr << "Error: Registrar is empty\n";
-            dlclose(gm_handle);
-            return; 
+        if (errorHandle(!game_manager_registrar || game_manager_registrar->empty(), "Registrar is empty", gm_handle)) { return; }
 
-        }
         auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
         createdFactory = gm.hasFactory();
         
-
         // Create the GameManager instance
         gameManager = gm.create(verbose_);
         createdGameManager = (gameManager != nullptr);
         
-
         gm_name = gm.name();
         }
 
-        if (!createdFactory){
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: GameManager factory not found for: " << gm_name << std::endl;
-            dlclose(gm_handle); // Close the GameManager shared object handle
-            return;
-        }
-        if (!createdGameManager) {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: Failed to init Game manager from path: " << gmPath << std::endl;
-            dlclose(gm_handle); // Close the GameManager shared object handle
-            return;
-        }
+        if (errorHandle(!createdFactory, "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
+        
+        if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) { return; }
 
         // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         unique_ptr<Player> player2 = algo2_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
-        if (!player1 || !player2) {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: Failed to create players from algorithms." << std::endl;
-            dlclose(gm_handle); // Close the GameManager shared object handle
-            return;
+        if (errorHandle(!gameManager, "GameManager instance is null", gm_handle, gm_name)) {
+            return; // Exit if the GameManager instance is null
         }
 
         // Get algorithm names and factories
@@ -310,12 +292,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         {
         lock_guard<mutex> lock(allResultsMutex_);
         SnapshotGameResult snap = makeSnapshot(result, mapData_.rows, mapData_.cols);
-        if (snap.board.empty()) {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: Empty board in GameResult for GameManager: " << gm_name << std::endl;
-            dlclose(gm_handle); // Close the GameManager shared object handle
-            return;
-        } 
+        if (errorHandle(snap.board.empty(), "Empty board in GameResult for GameManager: ", gm_handle, gm_name)) { return; }
         allResults.emplace_back(snap, gm_name);
         }
     
@@ -326,6 +303,29 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
 
     // Remove the GameManager entry from the registrar and close the handle
     dlclose(gm_handle); // Close the GameManager shared object handle
+}
+
+/**
+ * @brief Handles errors related to GameManager operations.
+ *
+ * This function checks a condition and prints an error message if the condition is true.
+ * It also closes the GameManager shared object handle and returns true to indicate an error.
+ *
+ * @param condition The condition to check.
+ * @param msg The error message to print if the condition is true.
+ * @param gm_handle The handle of the GameManager shared object.
+ * @param name Optional name of the GameManager for more context in the error message.
+ * @return true if an error occurred, false otherwise.
+ */
+bool ComparativeSimulator::errorHandle (bool condition ,const string& msg, void* gm_handle, const string& name) {
+    if (condition) {
+        std::cerr << msg << name << std::endl;
+        if (gm_handle) {
+            dlclose(gm_handle); // Close the GameManager shared object handle
+        }
+        return true; // Indicate an error occurred
+    }
+    return false; // No error
 }
 
 /**

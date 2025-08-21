@@ -5,7 +5,7 @@ docker run -it --rm \
 
 cmake -S . -B build && cmake --build build -j
 
-./simulator_209277367_322542887 -comparative game_map=1_maps \
+./simulator_209277367_322542887 -comparative game_map=1_maps/valid_input_complex.txt \
   game_managers_folder=1_gm_so \
   algorithm1=1_algo_so/Algorithm_209277367_322542887.so \
   algorithm2=1_algo_so/Algorithm_209277367_322542888.so \
