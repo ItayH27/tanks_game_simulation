@@ -55,7 +55,7 @@ private:
     void runGames();
     void runSingleGame(const path& gmPath);
 
-    
+    static bool errorHandle (bool condition ,const string& msg, void* gm_handle, const string& name = "");
 
     struct SnapshotGameResult {
         int winner;
