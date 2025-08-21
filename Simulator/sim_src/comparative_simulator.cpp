@@ -149,13 +149,14 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
     lock_guard<mutex> lock(gmRegistrarmutex_);
     auto absPath = std::filesystem::absolute(path);
+    string soName = absPath.stem().string();
 
     if (!game_manager_registrar) {
         lock_guard<mutex> lock(stderrMutex_);
         std::cerr << "Error: Game manager registrar is null\n";
         return nullptr;
     }
-    game_manager_registrar->createEntry(path);
+    game_manager_registrar->createEntry(soName);
 
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
@@ -240,30 +241,26 @@ void ComparativeSimulator::runGames() {
  * @param gmPath Path to the GameManager `.so` file to load and execute.
  */
 void ComparativeSimulator::runSingleGame(const path& gmPath) {
+    string gm_name = gmPath.stem().string();
     // load .so file for Game Manager
     void* gm_handle = loadGameManagerSO(gmPath);
     if (errorHandle(!gm_handle, "Failed to load GameManager .so file: ", gm_handle, gmPath.string())) { return; }
    
     {
         unique_ptr<AbstractGameManager> gameManager;
-        string gm_name;
-        bool createdGameManager = false, createdFactory = false;
+        bool createdGameManager = false;
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
         if (errorHandle(!game_manager_registrar || game_manager_registrar->empty(), "Registrar is empty", gm_handle)) { return; }
 
-        auto gm = (game_manager_registrar->end()[-1]); // Get the last registered GameManager
-        createdFactory = gm.hasFactory();
+        auto gm = (game_manager_registrar->managerByName(gm_name)); // Get the last registered GameManager
+        if (errorHandle(!(gm.hasFactory()), "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
         
         // Create the GameManager instance
         gameManager = gm.create(verbose_);
         createdGameManager = (gameManager != nullptr);
-        
-        gm_name = gm.name();
         }
-
-        if (errorHandle(!createdFactory, "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
         
         if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) { return; }
 
@@ -455,17 +452,21 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
             oss << "\n"; // defensive: keep shape even if no names
         }
 
+        auto tanksOrZero = [&](size_t idx) -> int {
+            return idx < group.result.remaining_tanks.size() ? group.result.remaining_tanks[idx] : 0;
+        };
+
         oss << (
             group.result.winner == 0
             ? (group.result.reason == GameResult::ALL_TANKS_DEAD
                 ? "Tie, both players have zero tanks"
                 : group.result.reason == GameResult::MAX_STEPS
                     ? "Tie, reached max steps = " + std::to_string(group.result.rounds) +
-                      ", player 1 has " + std::to_string(group.result.remaining_tanks[0]) +
-                      " tanks, player 2 has " + std::to_string(group.result.remaining_tanks[1]) + " tanks"
+                    ", player 1 has " + std::to_string(tanksOrZero(0)) +
+                    " tanks, player 2 has " + std::to_string(tanksOrZero(1)) + " tanks"
                     : "Tie, both players have zero shells for 40 steps") // replace 40 with your constant if you have one
             : "Player " + std::to_string(group.result.winner) + " won with " +
-              std::to_string(group.result.remaining_tanks[group.result.winner - 1]) + " tanks still alive"
+            std::to_string(tanksOrZero(group.result.winner - 1)) + " tanks still alive"
         ) << "\n";
 
         oss << group.result.rounds << "\n";
