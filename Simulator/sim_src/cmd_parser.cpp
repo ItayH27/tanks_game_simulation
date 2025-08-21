@@ -14,6 +14,25 @@ namespace fs = std::filesystem;
 namespace {
     using ParseResult = CmdParser::ParseResult;
 
+    // Allowed argument keys for comparative and competition modes
+    static const std::vector<std::string> validComparativeKeys = {
+        "game_map", "game_managers_folder", "algorithm1", "algorithm2", "num_threads"
+    };
+
+    static const std::vector<std::string> validCompetitionKeys = {
+        "game_maps_folder", "game_manager", "algorithms_folder", "num_threads"
+    };
+
+    void checkInvalidKeys(const std::unordered_map<std::string, std::string>& args, 
+                        const std::vector<std::string>& validKeys,
+                        std::vector<std::string>& errors) {
+        for (const auto& [key, _] : args) {
+            if (std::find(validKeys.begin(), validKeys.end(), key) == validKeys.end()) {
+                errors.emplace_back("Invalid argument: " + key);
+            }
+        }
+    }
+
     // ---- small utils ----
     inline std::string trim(std::string s) {
         auto issp = [](unsigned char c){ return std::isspace(c); };
@@ -250,8 +269,10 @@ CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
     };
     if (nz.wantComparative) {
         need({"game_map","game_managers_folder","algorithm1","algorithm2"});
+        checkInvalidKeys(nz.kv, validComparativeKeys, errors);
     } else {
         need({"game_maps_folder","game_manager","algorithms_folder"});
+        checkInvalidKeys(nz.kv, validCompetitionKeys, errors);
     }
 
     // Unsupported tokens (list all)
