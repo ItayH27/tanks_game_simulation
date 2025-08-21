@@ -59,5 +59,13 @@ public:
 
     auto begin() const { return managers_.begin(); }
     auto end() const { return managers_.end(); }
+    GameManagerRegistrar::GameManagerEntry managerByName(const std::string& name) {
+    auto it = std::find_if(managers_.begin(), managers_.end(),
+                           [&](const GameManagerEntry& entry) { return entry.name() == name; });
+        if (it != managers_.end()) {
+            return *it;
+        }
+        return GameManagerEntry(""); // Return an empty entry if not found
+    }
     void clear() { managers_.clear(); }
 };

@@ -173,18 +173,68 @@ TEST_F(ComparativeSimulatorUnitTest, BuildOutputBuffer_FormatsHeadersAndGroups) 
     // Expect the frequent group (gA) first:
     // Names: "GM_Z, GM_Y"
     EXPECT_NE(buf.find("GM_Z, GM_Y\n"), std::string::npos);
-    EXPECT_NE(buf.find("Winner: 1, Reason: 7\n12\n"), std::string::npos);
+    EXPECT_NE(buf.find("Player 1 won with 0 tanks still alive\n"), std::string::npos);
     EXPECT_NE(buf.find("AA\nBB\n"), std::string::npos);
 
     // Followed by the less frequent group (gB)
     EXPECT_NE(buf.find("GM_X\n"), std::string::npos);
-    EXPECT_NE(buf.find("Winner: 2, Reason: 9\n20\n"), std::string::npos);
+    EXPECT_NE(buf.find("Player 2 won with 0 tanks still alive\n"), std::string::npos);
     EXPECT_NE(buf.find("**\n"), std::string::npos);
 
     // There should be at least two "Winner:" occurrences
     size_t countWinner = 0;
-    for (size_t pos = 0; (pos = buf.find("Winner:", pos)) != std::string::npos; ++pos) ++countWinner;
+    for (size_t pos = 0; (pos = buf.find("won", pos)) != std::string::npos; ++pos) ++countWinner;
     EXPECT_GE(countWinner, 2u);
+}
+
+TEST_F(ComparativeSimulatorUnitTest, BuildOutputBuffer_ShowsRemainingTanks) {
+    sim.groups.clear();
+
+    // --- Prepare groups with explicit remaining_tanks ---
+    ComparativeSimulator::GameResultInfo gA;
+    gA.result = mkResult(1, 7, 12, rows({"AA", "BB"}));
+    gA.result.remaining_tanks = {12, 0}; // Player 1 has 12 tanks
+    gA.gm_names = {"GM_Z", "GM_Y"};
+    gA.count = 3;
+
+    ComparativeSimulator::GameResultInfo gB;
+    gB.result = mkResult(2, 9, 20, rows({"**"}));
+    gB.result.remaining_tanks = {0, 20}; // Player 2 has 20 tanks
+    gB.gm_names = {"GM_X"};
+    gB.count = 1;
+
+    // Emulate writeOutput behavior: ascending sort then pop back
+    sim.groups.push_back(gB); // less frequent
+    sim.groups.push_back(gA); // more frequent
+
+    const std::string mapPath = "/maps/demo.map";
+    const std::string algo1   = "/algos/A1.so";
+    const std::string algo2   = "/algos/A2.so";
+
+    std::string buf = sim.BuildOutputBuffer(mapPath, algo1, algo2);
+
+    // --- Assertions ---
+    // Headers
+    EXPECT_NE(buf.find("game_map=demo.map"), std::string::npos);
+    EXPECT_NE(buf.find("algorithm1=A1.so"), std::string::npos);
+    EXPECT_NE(buf.find("algorithm2=A2.so"), std::string::npos);
+
+    // Group GM names
+    EXPECT_NE(buf.find("GM_Z, GM_Y"), std::string::npos);
+    EXPECT_NE(buf.find("GM_X"), std::string::npos);
+
+    // Player wins with correct remaining tanks
+    EXPECT_NE(buf.find("Player 1 won with 12 tanks still alive"), std::string::npos);
+    EXPECT_NE(buf.find("Player 2 won with 20 tanks still alive"), std::string::npos);
+
+    // Board rows
+    EXPECT_NE(buf.find("AA\nBB"), std::string::npos);
+    EXPECT_NE(buf.find("**"), std::string::npos);
+
+    // Ensure at least two "Player" lines
+    size_t countPlayer = 0;
+    for (size_t pos = 0; (pos = buf.find("Player", pos)) != std::string::npos; ++pos) ++countPlayer;
+    EXPECT_GE(countPlayer, 2u);
 }
 
 // ===================== writeOutput =====================
@@ -235,12 +285,12 @@ TEST_F(ComparativeSimulatorUnitTest, WriteOutput_CreatesFileAndWritesSortedGroup
     // Most frequent group (R1/R2) should appear before the singleton group (R3)
     // Check both GM names are comma-separated on one line
     EXPECT_NE(contents.find("GM_A, GM_B\n"), std::string::npos);
-    EXPECT_NE(contents.find("Winner: 1, Reason: 2\n100\n"), std::string::npos);
+    EXPECT_NE(contents.find("Player 1 won with 0 tanks still alive\n"), std::string::npos);
     EXPECT_NE(contents.find("..\n##\n"), std::string::npos);
 
     // And the singleton group:
     EXPECT_NE(contents.find("GM_C\n"), std::string::npos);
-    EXPECT_NE(contents.find("Winner: 0, Reason: 0\n5\n"), std::string::npos);
+    EXPECT_NE(contents.find("Tie, both players have zero tanks\n"), std::string::npos);
     EXPECT_NE(contents.find("xo\n"), std::string::npos);
 }
 
@@ -330,4 +380,97 @@ TEST(E2E_Comparative, RunFull) {
     std::regex winRe(R"(Winner:\s*\d+\s*,\s*Reason:\s*\d+)");
     EXPECT_TRUE(std::regex_search(contents, winRe))
         << "No winner/reason block found.\n" << contents;
+}
+
+// ===================== Check cerr =====================
+// RAII class to capture std::cerr
+class CerrCapture {
+public:
+    CerrCapture() : old_buf(std::cerr.rdbuf(capture.rdbuf())) {}
+    ~CerrCapture() { std::cerr.rdbuf(old_buf); }
+    std::string str() const { return capture.str(); }
+private:
+    std::ostringstream capture;
+    std::streambuf* old_buf;
+};
+
+class ComparativeSimulatorCerrTest : public ::testing::Test {
+protected:
+    ComparativeSimulator sim{true, 1}; // verbose = true, 1 thread
+};
+
+// Test failed map load
+TEST_F(ComparativeSimulatorCerrTest, RunFailsOnBadMap) {
+    CerrCapture capture;
+    int rc = sim.run("/non/existent/map.txt", ".", "algo1.so", "algo2.so");
+    std::string output = capture.str();
+
+    EXPECT_EQ(rc, 1);
+    EXPECT_NE(output.find("Error: failed to load the map data."), std::string::npos);
+}
+
+// Test failed algorithm load
+TEST_F(ComparativeSimulatorCerrTest, LoadAlgoSOPrintsError) {
+    CerrCapture capture;
+    bool rc = sim.loadAlgoSO("/non/existent/algo.so");
+    std::string output = capture.str();
+
+    EXPECT_FALSE(rc);
+    EXPECT_NE(output.find("Failed loading .so file from path"), std::string::npos);
+}
+
+// Test missing GameManager registrar
+TEST_F(ComparativeSimulatorCerrTest, LoadGameManagerSONullRegistrar) {
+    CerrCapture capture;
+
+    // Temporarily set registrar to nullptr
+    auto* old = sim.game_manager_registrar;
+    sim.game_manager_registrar = nullptr;
+
+    void* handle = sim.loadGameManagerSO("fake.so");
+    std::string output = capture.str();
+
+    EXPECT_EQ(handle, nullptr);
+    EXPECT_NE(output.find("Error: Game manager registrar is null"), std::string::npos);
+
+    sim.game_manager_registrar = old; // restore
+}
+
+// Test errorHandle prints message
+TEST_F(ComparativeSimulatorCerrTest, ErrorHandlePrintsMessage) {
+    CerrCapture capture;
+    void* fakeHandle = nullptr;
+
+    bool result = sim.errorHandle(true, "Custom error: ", fakeHandle, "GM_FAKE");
+    std::string output = capture.str();
+
+    EXPECT_TRUE(result);
+    EXPECT_NE(output.find("Custom error: GM_FAKE"), std::string::npos);
+}
+
+// Test writeOutput fails to open file
+TEST_F(ComparativeSimulatorCerrTest, WriteOutputFileFail) {
+    CerrCapture capture;
+
+    // Pass an invalid folder to trigger file open failure
+    sim.writeOutput("map.txt", "algo1.so", "algo2.so", "/non/existent/folder");
+
+    std::string output = capture.str();
+    EXPECT_NE(output.find("Error: failed to open output file."), std::string::npos);
+}
+
+// Test getGameManagers with empty folder
+TEST_F(ComparativeSimulatorCerrTest, GetGameManagersEmptyFolder) {
+    CerrCapture capture;
+
+    // Make a real temporary empty folder
+    std::filesystem::path tmp = std::filesystem::temp_directory_path() / "empty_folder";
+    std::filesystem::create_directories(tmp);
+
+    sim.getGameManagers(tmp.string());
+    std::string output = capture.str();
+
+    EXPECT_TRUE(sim.gms_paths_.empty());
+
+    std::filesystem::remove(tmp); // clean up
 }
