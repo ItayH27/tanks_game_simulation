@@ -6,14 +6,14 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include "./utils.test.cpp" 
+#include "./utils/utils.test.cpp" 
 
 namespace fs = std::filesystem;
 
 // --- Make internals visible to tests (test-only hack) ---
 #define private public
 #define protected public
-#include "../sim_include/competitive_simulator.h"
+#include "competitive_simulator.h"
 #undef private
 #undef protected
 

@@ -14,7 +14,6 @@
 #include "../sim_include/Simulator.h"
 #include "../sim_include/AlgorithmRegistrar.h"
 
-
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
     : Simulator(verbose, numThreads) {
         algoRegistrar_ = &AlgorithmRegistrar::getAlgorithmRegistrar();
@@ -24,13 +23,20 @@ CompetitiveSimulator::~CompetitiveSimulator() {
     lock_guard<mutex> lock(handlesMutex_);
     for (auto& [path, handle] : algoPathToHandle_) {
         if (handle) {
-            dlclose(handle);
+            int result = dlclose(handle);
+            if (result != 0) {
+                std::cerr << "Warning: dlclose failed for " << path << ": " << dlerror() << std::endl;
+            }
+            handle = nullptr;
         }
     }
     algoPathToHandle_.clear();
 
     if (gameManagerHandle_) {
-        dlclose(gameManagerHandle_);
+        int result = dlclose(gameManagerHandle_);
+        if (result != 0) {
+            std::cerr << "Warning: dlclose failed for game manager: " << dlerror() << std::endl;
+        }
         gameManagerHandle_ = nullptr;
     }
 }
@@ -410,6 +416,11 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
 
         // Run game manager with players and factories
         auto gm = createGameManager();
+        if (!gm) {
+            lock_guard<mutex> lock(stderrMutex_);
+            cerr << "Error: Failed to create game manager for map: " << mapPath << endl;
+            return;
+        }
         GameResult result = gm->run(mapData.cols, mapData.rows, *mapData.satelliteView, mapData.name,
             mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
             algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
