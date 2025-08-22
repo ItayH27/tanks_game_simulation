@@ -115,16 +115,5 @@ if(BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
 
     add_test(NAME ${name} COMMAND ${name})
 
-    # --- E2E env vars (so E2E tests don't skip) ---
-    set_tests_properties(${name} PROPERTIES
-      ENVIRONMENT
-        "E2E_MAPS_DIR=${CMAKE_SOURCE_DIR}/tests/utils/maps;\
-          E2E_GM_SO=${CMAKE_SOURCE_DIR}/tests/utils/gm/competition_gm.so;\
-          E2E_ALGOS_DIR=${CMAKE_SOURCE_DIR}/tests/utils/competition_algos;\
-          E2E_COMP_MAP=${CMAKE_SOURCE_DIR}/tests/utils/comp/comparative_map.txt;\
-          E2E_COMP_GM_DIR=${CMAKE_SOURCE_DIR}/tests/utils/comp/comparative_gms;\
-          E2E_COMP_ALGO1=${CMAKE_SOURCE_DIR}/tests/utils/comp/comparative_algo1.so;\
-          E2E_COMP_ALGO2=${CMAKE_SOURCE_DIR}/tests/utils/comp/comparative_algo2.so"
-    )
   endforeach()
 endif()

@@ -80,18 +80,16 @@ int ComparativeSimulator::run(const string& mapPath,
         return 1;
     }
 
-    if (!loadAlgoSO(algorithmSoPath1) || !loadAlgoSO(algorithmSoPath2)) {
-        std::cerr << "Error: failed to load one or both algorithms." << std::endl;
-        return 1;
-    }
-    algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
-    algo2_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->end() - 1));
-    
-    
-    if (!algo1_->hasPlayerFactory() || !algo2_->hasPlayerFactory() || 
-        !algo1_->hasTankAlgorithmFactory() || !algo2_->hasTankAlgorithmFactory()) {
-        std::cerr << "Error: Missing player or tank algorithm factory for one of the algorithms." << std::endl;
-        return 1;
+    if (!loadAlgoSO(algorithmSoPath1) || !loadAlgoSO(algorithmSoPath2)) return 1;
+    auto p1 = std::filesystem::canonical(algorithmSoPath1);
+    auto p2 = std::filesystem::canonical(algorithmSoPath2);
+
+    if (p1 == p2) {
+        algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
+        algo2_ = algo1_;  
+    } else {
+        algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
+        algo2_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->end() - 1));
     }
 
     getGameManagers(gmFolder);
@@ -104,6 +102,7 @@ int ComparativeSimulator::run(const string& mapPath,
 
     return 0;
 }
+
 
 /**
  * @brief Dynamically loads an Algorithm shared object (.so) file.
@@ -118,6 +117,11 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
     auto absPath = std::filesystem::absolute(path);
     string soName = absPath.stem().string();
 
+    if (void* probe = dlopen(absPath.c_str(), RTLD_LAZY | RTLD_NOLOAD)) {
+        dlclose(probe); 
+        return true;
+    }
+
     if (!algo_registrar) {
         std::cerr << "Error: Algorithm registrar is null\n";
         return false;
@@ -126,12 +130,22 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
     
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
-        if (algo_registrar) { algo_registrar->removeLast(); } //Rollback
+        algo_registrar->removeLast(); //Rollback
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
         std::cerr << (error ? error : "Unknown error") << "\n";
         return false;
     }
+
+    try {
+        algo_registrar->validateLastRegistration(); 
+    } catch (...) {
+        dlclose(handle);
+        algo_registrar->removeLast();
+        std::cerr << "Error: registration incomplete for " << soName << "\n";
+        return false;
+    }
+
     algoHandles_.push_back(handle);
     return true;
 }
@@ -165,6 +179,16 @@ void* ComparativeSimulator::loadGameManagerSO(const string& path) {
         const char* error = dlerror();
         std::cerr << "Failed loading .so file from path: " << path << "\n";
         std::cerr << (error ? error : "Unknown error") << "\n";
+        return nullptr;
+    }
+
+    try {
+        game_manager_registrar->validateLast(); 
+    } catch (const std::exception& e) {
+        dlclose(handle);
+        game_manager_registrar->removeLast();
+        lock_guard<mutex> lock(stderrMutex_);
+        std::cerr << "Error: " << e.what() << "\n";
         return nullptr;
     }
     return handle;
@@ -264,24 +288,22 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         {
         // Get the GameManager factory and name from the registrar
         lock_guard<mutex> lock(gmRegistrarmutex_);
-        if (errorHandle(!game_manager_registrar || game_manager_registrar->empty(), "Registrar is empty", gm_handle)) { return; }
+        // if (errorHandle(!game_manager_registrar || game_manager_registrar->empty(), "Registrar is empty", gm_handle)) { return; }
 
         auto gm = (game_manager_registrar->managerByName(gm_name)); // Get the last registered GameManager
-        if (errorHandle(!(gm.hasFactory()), "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
+        // if (errorHandle(!(gm.hasFactory()), "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
         
         // Create the GameManager instance
         gameManager = gm.create(verbose_);
         createdGameManager = (gameManager != nullptr);
         }
         
-        if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) { return; }
+        if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) return;
 
         // Create players using the algorithm factories
         unique_ptr<Player> player1 = algo1_->createPlayer(0, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
         unique_ptr<Player> player2 = algo2_->createPlayer(1, mapData_.cols, mapData_.rows, mapData_.maxSteps, mapData_.numShells);
-        if (errorHandle(!gameManager, "GameManager instance is null", gm_handle, gm_name)) {
-            return; // Exit if the GameManager instance is null
-        }
+        if (errorHandle(!player1 || !player2, "Failed to create one (or more) of the players", gm_handle)) return;
 
         // Get algorithm names and factories
         string name1 = algo1_->name();
