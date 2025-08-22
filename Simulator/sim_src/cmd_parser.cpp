@@ -1,5 +1,4 @@
 #include "../sim_include/cmd_parser.h"
-
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
