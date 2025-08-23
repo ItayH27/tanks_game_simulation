@@ -103,7 +103,7 @@ bool GM_209277367_322542887::isValidMove(const TankInfo& tank, const ActionReque
  * @param tank Tank to check.
  * @return true if shooting is allowed, false otherwise.
  */
-bool GM_209277367_322542887::isValidShoot(const TankInfo& tank) {
+bool GM_209277367_322542887::isValidShoot(const TankInfo& tank) const {
     // Check if the tank has ammo and zeroed cooldown
     return tank.getAmmo() > 0 && tank.getTurnsToShoot() == 0;
 }
@@ -190,7 +190,7 @@ void GM_209277367_322542887::moveTank(TankInfo& tank, const ActionRequest action
     gameboard_[y][x] = ' ';
 
     if (action == ActionRequest::MoveBackward) {
-        dir = static_cast<Direction>((static_cast<int>(dir) + 4) % NUM_OF_DIRECTIONS);
+        dir = static_cast<Direction>((static_cast<int>(dir) + 4) % 8);
     }
 
     auto [new_x, new_y] = nextLocation(x, y, dir);
@@ -241,7 +241,7 @@ void GM_209277367_322542887::handleTankCollisionAt(
             ShellIterator shell_it = getShellAt(new_x, new_y);
             int shell_dir = static_cast<int>((*shell_it)->getDirection());
 
-            if (static_cast<int>(dir) == ((shell_dir + 4) % NUM_OF_DIRECTIONS)) {
+            if (static_cast<int>(dir) == ((shell_dir + 4) % 8)) {
                 int tank_index = getTankIndexAt(old_x, old_y);
                 destroyedTanksIndices_.insert(tank_index);
                 tanks_[tank_index]->increaseTurnsDead();
@@ -290,16 +290,16 @@ void GM_209277367_322542887::rotate(TankInfo& tank, const ActionRequest action) 
     // Rotate the tank based on the action
     switch (action) {
         case ActionRequest::RotateLeft45:
-            new_dir = static_cast<Direction>((static_cast<int>(dir) - 1 + NUM_OF_DIRECTIONS) % NUM_OF_DIRECTIONS);
+            new_dir = static_cast<Direction>((static_cast<int>(dir) - 1 + 8) % 8);
             break;
         case ActionRequest::RotateRight45:
-            new_dir = static_cast<Direction>((static_cast<int>(dir) + 1) % NUM_OF_DIRECTIONS);
+            new_dir = static_cast<Direction>((static_cast<int>(dir) + 1) % 8);
             break;
         case ActionRequest::RotateLeft90:
-            new_dir = static_cast<Direction>((static_cast<int>(dir) - 2 + NUM_OF_DIRECTIONS) % NUM_OF_DIRECTIONS);
+            new_dir = static_cast<Direction>((static_cast<int>(dir) - 2 + 8) % 8);
             break;
         case ActionRequest::RotateRight90:
-            new_dir = static_cast<Direction>((static_cast<int>(dir) + 2) % NUM_OF_DIRECTIONS);
+            new_dir = static_cast<Direction>((static_cast<int>(dir) + 2) % 8);
             break;
         default:
             break; // No rotation
@@ -656,7 +656,7 @@ bool GM_209277367_322542887::handleShellCollision(Shell& shell, int x, int y, Di
     Direction other_dir = (*other_shell_it)->getDirection();
 
     auto areOppositeDirections = [](Direction d1, Direction d2) {
-        return static_cast<int>(d1) == (static_cast<int>(d2) + 4) % NUM_OF_DIRECTIONS;
+        return static_cast<int>(d1) == (static_cast<int>(d2) + 4) % 8;
     };
 
     if (areOppositeDirections(dir, other_dir)) {
@@ -906,21 +906,21 @@ GameResult GM_209277367_322542887::run(size_t map_width, size_t map_height, cons
         if (noAmmoFlag_) { // If both tanks are out of ammo
             noAmmoTimer_--; // Decrease the no ammo timer
             if (noAmmoTimer_ == 0) { // Check if the timer has reached zero
-                updateGameResult(TIE, NO_SHELLS_GAME_OVER, {numTanks1_, numTanks2_}, gameboard_, turn_);
-                gameOver_ = true; // Set game_over to true if both tanks are out of ammo for GAME_OVER_NO_AMMO turns
-            if (verbose_) gameLog_ << "Tie, both players have zero shells for " << GAME_OVER_NO_AMMO << " steps" << endl; // Print message if both tanks are out of ammo
+                updateGameResult(0, 2, {numTanks1_, numTanks2_}, gameboard_, turn_);
+                gameOver_ = true; // Set game_over to true if both tanks are out of ammo for 40 turns
+            if (verbose_) gameLog_ << "Tie, both players have zero shells for " << 40 << " steps" << endl; // Print message if both tanks are out of ammo
             }
         }
 
         if (gameOver_) { // Check if the game is over
             if (gameOverStatus_ == 3) { // Both players are missing tanks
-                updateGameResult(TIE, ALL_TANKS_DEAD, {0, 0}, gameboard_, turn_);
+                updateGameResult(0, 0, {0, 0}, gameboard_, turn_);
                 if (verbose_) gameLog_ << "Tie, both players have zero tanks" <<  endl;
             } else if (gameOverStatus_ == 1) { // Player 1 has no tanks left
-                updateGameResult(PLAYER_2_WIN, ALL_TANKS_DEAD, {0, numTanks2_}, gameboard_ ,turn_);
+                updateGameResult(2, 0, {0, numTanks2_}, gameboard_ ,turn_);
                 if (verbose_) gameLog_ << "Player 2 won with " << numTanks2_ << " tanks still alive" << endl;
             } else if (gameOverStatus_ == 2) { // Player 2 has no tanks left
-                updateGameResult(PLAYER_1_WIN, ALL_TANKS_DEAD, {numTanks1_, 0}, gameboard_ , turn_);
+                updateGameResult(1, 0, {numTanks1_, 0}, gameboard_ , turn_);
                 if (verbose_) gameLog_ << "Player 1 won with " <<  numTanks1_ << " tanks still alive" << endl;
             }
 

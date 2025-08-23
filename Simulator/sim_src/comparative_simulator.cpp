@@ -34,7 +34,6 @@ ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
 
 
 ComparativeSimulator::~ComparativeSimulator() {
-    
     // Ensure algorithm objects are destroyed before unloading .so files
     allResults.clear(); // if GameResult keeps algo-allocated objects
     groups.clear(); // clear the groups vector
@@ -73,6 +72,9 @@ int ComparativeSimulator::run(const string& mapPath,
                               const string& gmFolder,
                               const string& algorithmSoPath1,
                               const string& algorithmSoPath2) {
+    logger_.info("Starting comparative simulation...");
+    logger_.reportError("Some error", 123, "abc");
+    logger_.reportWarn("Some warning", 456, "def");
     mapData_ = readMap(mapPath);
     if (mapData_.failedInit) {
         std::cerr << "Error: failed to load the map data." << std::endl;

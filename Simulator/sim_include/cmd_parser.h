@@ -23,6 +23,11 @@ public:
         std::optional<int> numThreads;
         bool verbose = false;
 
+        // Logger
+        bool enableLogging = false;
+        bool debug = false;
+        std::optional<std::string> logFile;
+
         static ParseResult fail(std::string msg) {
             ParseResult r;
             r.valid = false;

@@ -44,8 +44,6 @@ private:
     shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo1_;
     shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> algo2_;
 
-    static unordered_map<GameResult, vector<string>> gameResToGameManagers_;
-
     vector<path> gms_paths_;
 
     bool loadAlgoSO(const string& path);
@@ -55,7 +53,7 @@ private:
     void runGames();
     void runSingleGame(const path& gmPath);
 
-    static bool errorHandle (bool condition ,const string& msg, void* gm_handle, const string& name = "");
+    bool errorHandle (bool condition ,const string& msg, void* gm_handle, const string& name = "");
 
     struct SnapshotGameResult {
         int winner;
@@ -104,9 +102,9 @@ private:
                      const string& algorithmSoPath1,
                      const string& algorithmSoPath2);
 
-    static void printSatellite(std::ostream& os, const SnapshotGameResult& result);
+    void printSatellite(std::ostream& os, const SnapshotGameResult& result);
 
-    static string getFilename(const string& path) {
+    string getFilename(const string& path) {
         return std::filesystem::path(path).filename().string();
     }
 };

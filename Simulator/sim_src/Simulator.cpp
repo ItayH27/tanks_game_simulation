@@ -1,7 +1,7 @@
 #include "Simulator.h"
 
 Simulator::Simulator(bool verbose, size_t numThreads)
-    : verbose_(verbose), numThreads_(numThreads) {}
+    : verbose_(verbose), numThreads_(numThreads), logger_(utils::Logger::get()) {}
 
 /**
  * @brief Extracts an integer value from a configuration line in the map file.
@@ -206,6 +206,7 @@ Simulator::MapData Simulator::readMap(const std::string& file_path) {
     // Open file
     ifstream file(file_path);
     if (!file) { // Failed to open file
+        logger_.error("Error: Failed to open file: ", file_path);
         std::cerr << "Error: Failed to open file: " << file_path << endl;
         remove("input_errors.txt");
         mapData.failedInit = true;

@@ -2,6 +2,35 @@
 #include "../sim_include/cmd_parser.h"
 #include "../sim_include/competitive_simulator.h"
 #include "../sim_include/comparative_simulator.h"
+#include "logger.h"
+
+static void configureLogger(const CmdParser::ParseResult& r) {
+    using utils::Logger;
+    auto& L = Logger::get();
+
+    if (!r.enableLogging) {
+        L.setLevel(Logger::Level::Off);
+        L.setAlsoConsole(false);
+        (void)L.setOutputFile(""); // disable file
+        return;
+    }
+
+    // File (optional)
+    if (r.logFile && !r.logFile->empty()) {
+        if (!L.setOutputFile(*r.logFile, /*append=*/true)) {
+            std::cerr << "Warning: could not open log file '" << *r.logFile
+                      << "'. Logging to console only.\n";
+            (void)L.setOutputFile(""); // console-only
+        }
+    } else {
+        (void)L.setOutputFile(""); // console-only
+    }
+
+    // Level & extras
+    L.setLevel(r.debug ? Logger::Level::Debug : Logger::Level::Info);
+    L.setAlsoConsole(true);
+    L.setUseUTC(false);
+}
 
 int main(int argc, char** argv) {
     CmdParser::ParseResult result = CmdParser::parse(argc, argv);
@@ -11,6 +40,8 @@ int main(int argc, char** argv) {
         CmdParser::printUsage();
         return 1;
     }
+
+    configureLogger(result);
 
     try {
         if (result.mode == CmdParser::Mode::Comparative) {
