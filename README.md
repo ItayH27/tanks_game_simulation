@@ -30,6 +30,5 @@ A Multi-Threaded Tank Game Simulator in C++ that dynamically loads game managers
 - `UserCommon/` -Shared code and interfaces developed by us, used across the Simulator, Algorithm, and GameManager projects.
 - `CMakeLists.txt` – Root CMake configuration file for building the entire project, delegates to sub-project CMake files in `Simulator/`, `Algorithm/` and `GameManager/`.
 - `tests/` – Unit tests written using Google Test to verify correctness of the modules.
-- `maps/` – Contains input files representing various battlefield maps.
 - `docs/` - Folder containing all .md files
 - `students.txt` - Text file with the contributors information.

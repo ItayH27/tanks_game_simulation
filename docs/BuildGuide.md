@@ -53,8 +53,7 @@ There are two optional arguments for each of the modes:
     - Above means that the **total number of threads will never be 2**
     - **Note:** exact number of threads may be lower than requested in the command line, in the case there is no way to properly utilize the required number of threads.
 
-- `-verbose` - when this flag is provided, each `GameManager` creates detailed output files (same format as Assignment 2).  
-  Without this flag, only the simulator’s summary results file is generated.
+- `-verbose` - when this flag is provided, each `GameManager` creates detailed output files (same format as Assignment 2). Without this flag, only the simulator’s summary results file is generated.
 
 
 ## Outputs
