@@ -22,12 +22,12 @@ using std::mutex, std::lock_guard, std::thread, std::filesystem::directory_itera
 ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
     : Simulator(verbose, numThreads) {
         algo_registrar = &AlgorithmRegistrar::getAlgorithmRegistrar();
-        if (!algo_registrar) {
+        if (!algo_registrar) { // Should never happen
             throw std::runtime_error("Error: Failed to get AlgorithmRegistrar instance.");
         }
 
         game_manager_registrar = &GameManagerRegistrar::getGameManagerRegistrar();
-        if (!game_manager_registrar) {
+        if (!game_manager_registrar) { // Should never happen
             throw std::runtime_error("Error: Failed to get GameManagerRegistrar instance.");
         }
 }
@@ -37,8 +37,10 @@ ComparativeSimulator::~ComparativeSimulator() {
     // Ensure algorithm objects are destroyed before unloading .so files
     allResults.clear(); // if GameResult keeps algo-allocated objects
     groups.clear(); // clear the groups vector
-    algo1_.reset();
-    algo2_.reset();
+    algo1_.reset(); // destroy the shared_ptr
+    algo2_.reset(); // destroy the shared_ptr
+
+     // Clear registrars to avoid dangling pointers
 
     if (game_manager_registrar) {
         game_manager_registrar->clear();
@@ -73,33 +75,45 @@ int ComparativeSimulator::run(const string& mapPath,
                               const string& algorithmSoPath1,
                               const string& algorithmSoPath2) {
     logger_.info("Starting comparative simulation...");
-    logger_.reportError("Some error", 123, "abc");
-    logger_.reportWarn("Some warning", 456, "def");
-    mapData_ = readMap(mapPath);
+    mapData_ = readMap(mapPath); // Read and validate map data
     if (mapData_.failedInit) {
-        std::cerr << "Error: failed to load the map data." << std::endl;
+        logger_.reportError("Failed to read map data from: ", mapPath);
         return 1;
     }
+    logger_.debug("Map data read successfully: ", mapData_.name,
+                   " (", mapData_.cols, "x", mapData_.rows, "), maxSteps=", mapData_.maxSteps,
+                   ", numShells=", mapData_.numShells);
 
+    // Load algorithm shared objects
     if (!loadAlgoSO(algorithmSoPath1) || !loadAlgoSO(algorithmSoPath2)) return 1;
+    logger_.info("Loaded algorithm shared objects successfully: ", algorithmSoPath1, " and ", algorithmSoPath2);
     auto p1 = std::filesystem::canonical(algorithmSoPath1);
     auto p2 = std::filesystem::canonical(algorithmSoPath2);
 
-    if (p1 == p2) {
+    // Verify that both algorithms have the required factories
+    if (p1 == p2) { // Same .so file provided twice
         algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
         algo2_ = algo1_;  
-    } else {
+    } else { // Different .so files
         algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
         algo2_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->end() - 1));
     }
 
+    // Get the game manager path names from the specified folder
     getGameManagers(gmFolder);
     if (gms_paths_.empty()) {
-        std::cerr << "Error: No GameManager shared libraries found in folder: " << gmFolder << std::endl;
+        logger_.reportError("No GameManager shared libraries found in folder: ", gmFolder);
         return 1;
     }
+    logger_.debug("Found ", gms_paths_.size(), " GameManager .so files in folder: ", gmFolder);
+
+    // Run all games
     runGames();
+    logger_.info("All games executed. Writing output...");
+
+    // Write output to file
     writeOutput(mapPath, algorithmSoPath1, algorithmSoPath2, gmFolder);
+    logger_.info("Comparative simulation completed.");
 
     return 0;
 }
@@ -115,39 +129,48 @@ int ComparativeSimulator::run(const string& mapPath,
  * @return true if the shared object was successfully loaded, false otherwise.
  */
 bool ComparativeSimulator::loadAlgoSO(const string& path) {
+    // Get absolute path and derive the .so name
     auto absPath = std::filesystem::absolute(path);
     string soName = absPath.stem().string();
 
+    // Check if already loaded
     if (void* probe = dlopen(absPath.c_str(), RTLD_LAZY | RTLD_NOLOAD)) {
         dlclose(probe); 
         return true;
     }
+    logger_.debug("Loading algorithm .so file: ", path);
 
+    // Register the algorithm entry
     if (!algo_registrar) {
-        std::cerr << "Error: Algorithm registrar is null\n";
+        logger_.reportError("Algorithm registrar is null");
         return false;
     }
     algo_registrar->createAlgorithmFactoryEntry(soName);
+    logger_.debug("Created algorithm entry for: ", soName);
     
+    // Attempt to load the .so file
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
-        algo_registrar->removeLast(); //Rollback
+        algo_registrar->removeLast(); //Rollback the last entry
         const char* error = dlerror();
-        std::cerr << "Failed loading .so file from path: " << path << "\n";
-        std::cerr << (error ? error : "Unknown error") << "\n";
+        logger_.reportError("Failed loading .so file from path: ", path, "\n", (error ? error : "Unknown error"));
         return false;
     }
 
+    // Validate the registration
     try {
         algo_registrar->validateLastRegistration(); 
     } catch (...) {
         dlclose(handle);
         algo_registrar->removeLast();
-        std::cerr << "Error: registration incomplete for " << soName << "\n";
+        logger_.reportError("Registration incomplete for ", soName);
         return false;
     }
 
+    // Store the handle for later cleanup
     algoHandles_.push_back(handle);
+
+    logger_.debug("Successfully loaded algorithm .so file: ", path);
     return true;
 }
 
@@ -162,49 +185,40 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
  * @return A valid handle to the loaded shared object on success, or nullptr on failure.
  */
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
+    lock_guard<mutex> lock(gmRegistrarmutex_);
+    // Get absolute path and derive the .so name
     auto absPath = std::filesystem::absolute(path);
     string soName = absPath.stem().string();
 
-    {
-        lock_guard<mutex> lock(gmRegistrarmutex_);
-        if (!game_manager_registrar) {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: Game manager registrar is null\n";
-            return nullptr;
-        }
-        game_manager_registrar->createEntry(soName);
+    // Register the GameManager entry
+    if (!game_manager_registrar) {
+        logger_.reportError("Game manager registrar is null");
+        return nullptr;
     }
+    logger_.debug("Loading GameManager .so file: ", path);
+    game_manager_registrar->createEntry(soName);
+    logger_.debug("Created GameManager entry for: ", soName);
 
+    // Attempt to load the .so file
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
-        {
-            lock_guard<mutex> lock(gmRegistrarmutex_);
-            game_manager_registrar->removeLast(); // Rollback the last entry
-        }
+        game_manager_registrar->removeLast(); // Rollback the last entry
         const char* error = dlerror();
-        {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Failed loading .so file from path: " << path << "\n";
-            std::cerr << (error ? error : "Unknown error") << "\n";
-        }
+        logger_.reportError("Failed loading .so file from path: ", path, "\n", (error ? error : "Unknown error"));
         return nullptr;
     }
 
+    // Validate the registration
     try {
-        lock_guard<mutex> lock(gmRegistrarmutex_);
         game_manager_registrar->validateLast(); 
     } catch (const std::exception& e) {
         dlclose(handle);
-        {
-            lock_guard<mutex> lock(gmRegistrarmutex_);
-            game_manager_registrar->removeLast();
-        }
-        {
-            lock_guard<mutex> lock(stderrMutex_);
-            std::cerr << "Error: " << e.what() << "\n";
-        }
+        game_manager_registrar->removeLast();
+        logger_.reportError("Registration incomplete for ", soName, "\n", e.what());
         return nullptr;
     }
+
+    logger_.debug("Successfully loaded GameManager .so file: ", path);
     return handle;
 }
 
@@ -225,6 +239,7 @@ void ComparativeSimulator::getGameManagers(const string& gameManagerFolder) {
     for (const auto& entry : directory_iterator(gameManagerFolder)) { // Check each entry in the directory
         if (entry.path().extension() == ".so") { // We care only about .so files
             gms_paths_.push_back(entry.path()); // Store the path of the GameManager .so file
+            logger_.debug("Found GameManager .so file: ", entry.path().string());
         }
     }
 }
@@ -243,11 +258,14 @@ void ComparativeSimulator::getGameManagers(const string& gameManagerFolder) {
 void ComparativeSimulator::runGames() {
     size_t threadCount = std::min(numThreads_, gms_paths_.size());
     if (threadCount == 1) { // Main thread runs all games sequentially
+        logger_.debug("Running all games sequentially on the main thread.");
         for (const auto& task : gms_paths_) {
             runSingleGame(task); // Run all games sequentially if only one thread
         }
         return;
     }
+
+    logger_.debug("Running games using a thread pool with ", threadCount, " threads.");
 
     std::atomic<size_t> nextGameManagers{0};
     vector<thread> workers;
@@ -273,6 +291,7 @@ void ComparativeSimulator::runGames() {
     for (auto& t : workers) {
         t.join();
     }
+    logger_.info("All games completed.");
 }
 
 /**
@@ -290,6 +309,7 @@ void ComparativeSimulator::runGames() {
  * @param gmPath Path to the GameManager `.so` file to load and execute.
  */
 void ComparativeSimulator::runSingleGame(const path& gmPath) {
+    logger_.debug("Thread ", std::this_thread::get_id(), " running game with GameManager: ", gmPath.string());
     string gm_name = gmPath.stem().string();
     // load .so file for Game Manager
     void* gm_handle = loadGameManagerSO(gmPath);
@@ -307,6 +327,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             // Create the GameManager instance
             gameManager = gm.create(verbose_);
             createdGameManager = (gameManager != nullptr);
+            logger_.debug("Thread ", std::this_thread::get_id(), " created GameManager instance for: ", gm_name);
         }
         
         if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) return;
@@ -321,8 +342,10 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         string name2 = algo2_->name();
         TankAlgorithmFactory tankAlgorithmFactory1 = algo1_->getTankAlgorithmFactory();
         TankAlgorithmFactory tankAlgorithmFactory2 = algo2_->getTankAlgorithmFactory();
+        logger_.debug("Thread ", std::this_thread::get_id(), " created players: ", name1, " and ", name2, " for GameManager: ", gm_name);
 
         // Run game manager with players and factories
+        logger_.info("Thread ", std::this_thread::get_id(), " starting game with GameManager: ", gm_name);
         GameResult result = gameManager->run(mapData_.cols, mapData_.rows, *mapData_.satelliteView, mapData_.name,
             mapData_.maxSteps, mapData_.numShells, *player1, name1, *player2, name2, tankAlgorithmFactory1, tankAlgorithmFactory2);
 
@@ -334,13 +357,19 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
             allResults.emplace_back(snap, gm_name);
         }
     
+        // Remove the GameManager entry from the registrar
+        
         lock_guard<mutex> lock(gmRegistrarmutex_);
         game_manager_registrar->eraseByName(gm_name); // Remove the GameManager entry by name
+        
+
+        logger_.info("Thread ", std::this_thread::get_id(), " finished game with GameManager: ", gm_name,
+                    ". Winner: ", result.winner, ", Reason: ", result.reason, ", Rounds: ", result.rounds);
     }
     
 
     // Remove the GameManager entry from the registrar and close the handle
-    dlclose(gm_handle); // Close the GameManager shared object handle
+    dlclose(gm_handle); 
 }
 
 /**
@@ -357,7 +386,7 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
  */
 bool ComparativeSimulator::errorHandle (bool condition ,const string& msg, void* gm_handle, const string& name) {
     if (condition) {
-        std::cerr << msg << name << std::endl;
+        logger_.reportWarn(msg, name);
         if (gm_handle) {
             dlclose(gm_handle); // Close the GameManager shared object handle
         }
@@ -383,8 +412,10 @@ bool ComparativeSimulator::sameResult(const SnapshotGameResult& a, const Snapsho
     // Fast path: exact structural/content equality
     if (a.board == b.board) return true;
 
+    // Compare boards cell-by-cell, treating '$' as equivalent to '#'
     auto norm = [](char c) constexpr { return c == '$' ? '#' : c; };
 
+    // Check dimensions, and then each cell
     if (a.board.size() != b.board.size()) return false;
     for (size_t y = 0; y < a.board.size(); ++y) {
         if (a.board[y].size() != b.board[y].size()) return false;
@@ -404,16 +435,16 @@ bool ComparativeSimulator::sameResult(const SnapshotGameResult& a, const Snapsho
  */
 void ComparativeSimulator::makeGroups(vector<pair<SnapshotGameResult, string>>& results) {
     for (auto& result : results) {
-        bool placed = false;
+        bool placed = false; // Flag to check if the result was placed in a group
         for (auto& group : groups) {
-            if (sameResult(result.first, group.result)) {
+            if (sameResult(result.first, group.result)) { // Found a matching group
                 group.gm_names.push_back(result.second);
                 group.count += 1;
                 placed = true;
                 break;
             }
         }
-        if (!placed) {
+        if (!placed) { // Create a new group if not placed
             groups.push_back({ std::move(result.first), { result.second }, 1 });
         }
     }
@@ -453,7 +484,7 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
 
     // If file didn't open, print error and the output buffer
     if (!outFile) {
-        cerr << "Error: failed to open output file." << endl;
+        logger_.reportError("Failed to open output file in folder: ", gmFolder);
         printf("%s\n", outputBuffer.c_str());
         return;
     }
@@ -477,6 +508,7 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
  */
 void ComparativeSimulator::printSatellite(std::ostream& os,
                            const SnapshotGameResult& result) {
+    // Print the board row by row
     for (size_t y = 0; y < result.board.size(); ++y) {
         for (size_t x = 0; x < result.board[y].size(); ++x) {
             char cell = result.board[y][x];
@@ -532,6 +564,7 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
         auto group = groups.back();
         groups.pop_back();
 
+        // Print the GameManager names, comma-separated
         if (!group.gm_names.empty()) {
             for (size_t i = 0; i + 1 < group.gm_names.size(); ++i) {
                 oss << group.gm_names[i] << ", ";
@@ -541,10 +574,12 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
             oss << "\n"; // defensive: keep shape even if no names
         }
 
+        // Helper to safely get remaining tanks or return 0 if index is out of bounds
         auto tanksOrZero = [&](size_t idx) -> int {
             return idx < group.result.remaining_tanks.size() ? group.result.remaining_tanks[idx] : 0;
         };
 
+        // Format the winner/tie message according to the spec
         oss << (
             group.result.winner == 0
             ? (group.result.reason == GameResult::ALL_TANKS_DEAD
@@ -558,10 +593,13 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
             std::to_string(tanksOrZero(group.result.winner - 1)) + " tanks still alive"
         ) << "\n";
 
+        // Print the number of rounds
         oss << group.result.rounds << "\n";
 
+        // Print the final board state
         printSatellite(oss, group.result);
 
+        // Print a blank line between groups, but not after the last
         if (!groups.empty()) {
             oss << "\n";
         }
