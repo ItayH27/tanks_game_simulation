@@ -22,7 +22,6 @@ A Multi-Threaded Tank Game Simulator in C++ that dynamically loads game managers
 
 ## Project Structure
 
-- `Assignment3.pdf` – Official assignment specification, including API details and rules.
 - `Simulator/` - C++ implementation of the multi-threaded simulator that runs multiple tank games in parallel.
 - `Algorithm/` - C++ implementation of player logic and tank decision-making algorithms. 
 - `GameManager/` - C++ implementation of the game manager, responsible for executing a single tank game.

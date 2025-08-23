@@ -15,7 +15,7 @@ cmake -B build
 
 2. From root directory, run Cmake:
 ```bash
-cmake --build build .
+cmake --build build 
 ```
 - This will create the following files:
     - `simulator_209277367_322542887` - Main game executable (used to run the simulator) in the root directory

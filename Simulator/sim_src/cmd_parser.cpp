@@ -129,6 +129,11 @@ namespace {
         bool wantComparative = false;
         bool wantCompetition = false;
         bool verbose = false;
+
+        // Logger
+        bool enableLogger = false;
+        bool debug = false;
+        std::optional<std::string> logFile;
     };
 
     /**
@@ -147,45 +152,56 @@ namespace {
         NormalizedArgs out;
         std::unordered_map<std::string,int> seen;
 
-        std::string pendingKey;   // holds a key awaiting '=' and value
-        bool seenEqForPending = false; // we saw an '=' after pendingKey
+        std::string pendingKey;
+        bool seenEqForPending = false;
 
         auto noteKV = [&](std::string k, std::string v, const std::string& original) {
             k = trim(std::move(k));
             v = trim(std::move(v));
-            if (k.empty() || v.empty()) {
-                out.unsupported.push_back(original);
-                return;
-            }
+            if (k.empty() || v.empty()) { out.unsupported.push_back(original); return; }
             if (++seen[k] > 1) out.duplicates.push_back(k);
-            out.kv[k] = v; // store last; duplicates are reported separately
+            out.kv[k] = v;
         };
 
         for (int i = 1; i < argc; ++i) {
             std::string tok = argv[i];
 
-            // switches
+            // existing switches
             if (tok == "-comparative") { out.wantComparative = true; continue; }
             if (tok == "-competition") { out.wantCompetition = true; continue; }
             if (tok == "-verbose")     { out.verbose        = true; continue; }
+            if (tok == "-debug") { out.debug = true; continue; }
+            if (tok == "-logger") {
+                out.enableLogger = true;
+
+                // Optional support for "-logger = path" (space-separated)
+                if (i + 2 < argc && std::string(argv[i + 1]) == "=") {
+                    out.logFile = trim(std::string(argv[i + 2]));
+                    i += 2;
+                }
+                continue;
+            }
+            if (tok.rfind("-logger=", 0) == 0) {
+                out.enableLogger = true;
+                out.logFile = trim(tok.substr(std::string("-logger=").size()));
+                continue;
+            }
 
             if (tok == "=") {
                 if (!pendingKey.empty() && !seenEqForPending) {
-                    seenEqForPending = true; // expect value next
+                    seenEqForPending = true;
                 } else {
                     out.unsupported.push_back(tok);
                 }
                 continue;
             }
 
-            // token contains '='
             const auto pos = tok.find('=');
             if (pos != std::string::npos) {
                 std::string left  = tok.substr(0, pos);
                 std::string right = tok.substr(pos + 1);
 
                 if (!pendingKey.empty() && !seenEqForPending) {
-                    // Had a dangling bare key before; since this token is a k=v, consider that bare key unsupported
                     out.unsupported.push_back(pendingKey);
                     pendingKey.clear();
                 }
@@ -197,53 +213,40 @@ namespace {
                     continue;
                 }
                 if (!left.empty() && right.empty()) {
-                    // "key=" -> expect value in the next token
                     pendingKey = trim(left);
                     seenEqForPending = true;
                     continue;
                 }
-                // "=value" (no key) -> unsupported
                 out.unsupported.push_back(tok);
                 continue;
             }
 
-            // no '=' inside token
             if (!pendingKey.empty() && seenEqForPending) {
-                // this token is the value for the pending key
                 noteKV(pendingKey, tok, pendingKey + "=" + tok);
                 pendingKey.clear();
                 seenEqForPending = false;
                 continue;
             }
 
-            // Potential bare key followed by '=' token? Look ahead
             if (!pendingKey.empty() && !seenEqForPending) {
-                // We already had a bare key with no '=', encountering another bare token -> previous was unsupported
                 out.unsupported.push_back(pendingKey);
                 pendingKey.clear();
             }
 
-            // Start a potential key that might be followed by '='
             pendingKey = trim(tok);
             seenEqForPending = false;
 
-            // If this is the last token or the next token isn't '=', this will be marked unsupported at the end.
             if (i + 1 < argc) {
                 std::string next = argv[i + 1];
                 if (next != "=") {
-                    // We'll decide on unsupported later; keep pendingKey to allow forms like "key=" on next token
                     continue;
                 }
             }
         }
 
-        // Clean up any dangling pendingKey
         if (!pendingKey.empty()) {
-            if (seenEqForPending) {
-                out.unsupported.push_back(pendingKey + "=");
-            } else {
-                out.unsupported.push_back(pendingKey);
-            }
+            if (seenEqForPending) out.unsupported.push_back(pendingKey + "=");
+            else                  out.unsupported.push_back(pendingKey);
         }
 
         return out;
@@ -362,6 +365,9 @@ CmdParser::ParseResult CmdParser::parse(int argc, char** argv) {
 
     res.verbose = nz.verbose;
     res.mode = nz.wantComparative ? Mode::Comparative : Mode::Competition;
+    res.enableLogging = nz.enableLogger;
+    res.debug = nz.debug;
+    if (nz.logFile && !nz.logFile->empty()) res.logFile = *nz.logFile;
 
     // Collect all parse-time errors before path validation
     std::vector<std::string> errors;
@@ -415,8 +421,9 @@ void CmdParser::printUsage() {
         << "  ./simulator_<ids> -comparative "
            "game_map=<file> game_managers_folder=<folder> "
            "algorithm1=<file> algorithm2=<file> "
-           "[num_threads=<n>] [-verbose]\n\n"
+           "[num_threads=<n>] [-verbose] [-logger[=<path>]] [-debug]\n\n"
         << "  ./simulator_<ids> -competition "
            "game_maps_folder=<folder> game_manager=<file> "
-           "algorithms_folder=<folder> [num_threads=<n>] [-verbose]\n";
+           "algorithms_folder=<folder> "
+           "[num_threads=<n>] [-verbose] [-logger[=<path>]] [-debug]\n";
 }

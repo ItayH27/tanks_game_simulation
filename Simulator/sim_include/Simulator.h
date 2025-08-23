@@ -11,6 +11,7 @@
 #include <mutex>
 #include "AbstractGameManager.h"
 #include "../UserCommon/UC_include/ExtSatelliteView.h"
+#include "logger.h"
 
 namespace fs = std::filesystem;
 using std::string, std::ofstream, std::ifstream, std::endl, std::cerr, std::pair, std::tuple, std::tie, std::unique_ptr;
@@ -39,6 +40,7 @@ protected:
 
     bool verbose_;
     size_t numThreads_;
+    utils::Logger& logger_;
     std::mutex stderrMutex_;
 
     MapData readMap(const std::string& file_path);

@@ -21,16 +21,6 @@
 #include "../../common/ActionRequest.h"
 #include "../UserCommon/UC_include/ExtSatelliteView.h"
 
-
-#define GAME_OVER_NO_AMMO 40 // Number of turns to wait after no ammo condition is met
-#define NUM_OF_DIRECTIONS 8 // Number of directions
-#define PLAYER_1_WIN 1
-#define PLAYER_2_WIN 2
-#define TIE 0
-#define NO_SHELLS_GAME_OVER 2
-#define TIMER_GAME_OVER 1
-#define ALL_TANKS_DEAD 0
-
 using std::unique_ptr, std::string, std::vector, std::ifstream, std::ofstream, std::set, std::cout, std::endl, std::move;
 using TankIterator = std::vector<std::unique_ptr<TankInfo>>::iterator;
 using ShellIterator = std::vector<std::unique_ptr<Shell>>::iterator;
@@ -91,11 +81,11 @@ namespace GameManager_209277367_322542887 {
         void checkShellsCollide();
         int getTankIndexAt(int x, int y) const;
         bool isValidAction(const TankInfo& tank, ActionRequest action) const;
-        static bool isValidShoot(const TankInfo& tank);
+        bool isValidShoot(const TankInfo& tank) const;
         bool isValidMove(const TankInfo& tank, ActionRequest action) const;
         void shoot(TankInfo& tank);
         void moveTank(TankInfo& tank, ActionRequest action);
-        static void rotate(TankInfo& tank, ActionRequest action);
+        void rotate(TankInfo& tank, ActionRequest action);
         ShellIterator getShellAt(int x, int y);
         ShellIterator deleteShell(ShellIterator it);
 

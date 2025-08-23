@@ -34,7 +34,6 @@ ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
 
 
 ComparativeSimulator::~ComparativeSimulator() {
-    
     // Ensure algorithm objects are destroyed before unloading .so files
     allResults.clear(); // if GameResult keeps algo-allocated objects
     groups.clear(); // clear the groups vector
@@ -48,7 +47,6 @@ ComparativeSimulator::~ComparativeSimulator() {
         algo_registrar->clear();
     }
 
-    lock_guard<mutex> lock(handlesMutex_);
     for (auto& handle : algoHandles_) {
         if (handle) {
             dlclose(handle);
@@ -74,6 +72,9 @@ int ComparativeSimulator::run(const string& mapPath,
                               const string& gmFolder,
                               const string& algorithmSoPath1,
                               const string& algorithmSoPath2) {
+    logger_.info("Starting comparative simulation...");
+    logger_.reportError("Some error", 123, "abc");
+    logger_.reportWarn("Some warning", 456, "def");
     mapData_ = readMap(mapPath);
     if (mapData_.failedInit) {
         std::cerr << "Error: failed to load the map data." << std::endl;
@@ -161,34 +162,47 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
  * @return A valid handle to the loaded shared object on success, or nullptr on failure.
  */
 void* ComparativeSimulator::loadGameManagerSO(const string& path) {
-    lock_guard<mutex> lock(gmRegistrarmutex_);
     auto absPath = std::filesystem::absolute(path);
     string soName = absPath.stem().string();
 
-    if (!game_manager_registrar) {
-        lock_guard<mutex> lock(stderrMutex_);
-        std::cerr << "Error: Game manager registrar is null\n";
-        return nullptr;
+    {
+        lock_guard<mutex> lock(gmRegistrarmutex_);
+        if (!game_manager_registrar) {
+            lock_guard<mutex> lock(stderrMutex_);
+            std::cerr << "Error: Game manager registrar is null\n";
+            return nullptr;
+        }
+        game_manager_registrar->createEntry(soName);
     }
-    game_manager_registrar->createEntry(soName);
 
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
-        game_manager_registrar->removeLast(); // Rollback the last entry
-        lock_guard<mutex> lock(stderrMutex_);
+        {
+            lock_guard<mutex> lock(gmRegistrarmutex_);
+            game_manager_registrar->removeLast(); // Rollback the last entry
+        }
         const char* error = dlerror();
-        std::cerr << "Failed loading .so file from path: " << path << "\n";
-        std::cerr << (error ? error : "Unknown error") << "\n";
+        {
+            lock_guard<mutex> lock(stderrMutex_);
+            std::cerr << "Failed loading .so file from path: " << path << "\n";
+            std::cerr << (error ? error : "Unknown error") << "\n";
+        }
         return nullptr;
     }
 
     try {
+        lock_guard<mutex> lock(gmRegistrarmutex_);
         game_manager_registrar->validateLast(); 
     } catch (const std::exception& e) {
         dlclose(handle);
-        game_manager_registrar->removeLast();
-        lock_guard<mutex> lock(stderrMutex_);
-        std::cerr << "Error: " << e.what() << "\n";
+        {
+            lock_guard<mutex> lock(gmRegistrarmutex_);
+            game_manager_registrar->removeLast();
+        }
+        {
+            lock_guard<mutex> lock(stderrMutex_);
+            std::cerr << "Error: " << e.what() << "\n";
+        }
         return nullptr;
     }
     return handle;
@@ -235,7 +249,6 @@ void ComparativeSimulator::runGames() {
         return;
     }
 
-    mutex gms_mutex_;
     std::atomic<size_t> nextGameManagers{0};
     vector<thread> workers;
 
@@ -286,16 +299,14 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         unique_ptr<AbstractGameManager> gameManager;
         bool createdGameManager = false;
         {
-        // Get the GameManager factory and name from the registrar
-        lock_guard<mutex> lock(gmRegistrarmutex_);
-        // if (errorHandle(!game_manager_registrar || game_manager_registrar->empty(), "Registrar is empty", gm_handle)) { return; }
+            // Get the GameManager factory and name from the registrar
+            lock_guard<mutex> lock(gmRegistrarmutex_);
 
-        auto gm = (game_manager_registrar->managerByName(gm_name)); // Get the last registered GameManager
-        // if (errorHandle(!(gm.hasFactory()), "GameManager factory not found for: ", gm_handle, gm_name)) { return; }
-        
-        // Create the GameManager instance
-        gameManager = gm.create(verbose_);
-        createdGameManager = (gameManager != nullptr);
+            auto gm = (game_manager_registrar->managerByName(gm_name)); // Get the last registered GameManager
+            
+            // Create the GameManager instance
+            gameManager = gm.create(verbose_);
+            createdGameManager = (gameManager != nullptr);
         }
         
         if (errorHandle(!createdGameManager, "Failed to create GameManager instance for: ", gm_handle, gm_name)) return;
@@ -312,19 +323,15 @@ void ComparativeSimulator::runSingleGame(const path& gmPath) {
         TankAlgorithmFactory tankAlgorithmFactory2 = algo2_->getTankAlgorithmFactory();
 
         // Run game manager with players and factories
-        GameResult result = gameManager->run(
-            mapData_.cols, mapData_.rows,
-            *mapData_.satelliteView, mapData_.name,
-            mapData_.maxSteps, mapData_.numShells,
-            *player1, name1, *player2, name2,
-            tankAlgorithmFactory1, tankAlgorithmFactory2);
+        GameResult result = gameManager->run(mapData_.cols, mapData_.rows, *mapData_.satelliteView, mapData_.name,
+            mapData_.maxSteps, mapData_.numShells, *player1, name1, *player2, name2, tankAlgorithmFactory1, tankAlgorithmFactory2);
 
         // Store the result in allResults
         {
-        lock_guard<mutex> lock(allResultsMutex_);
-        SnapshotGameResult snap = makeSnapshot(result, mapData_.rows, mapData_.cols);
-        if (errorHandle(snap.board.empty(), "Empty board in GameResult for GameManager: ", gm_handle, gm_name)) { return; }
-        allResults.emplace_back(snap, gm_name);
+            lock_guard<mutex> lock(allResultsMutex_);
+            SnapshotGameResult snap = makeSnapshot(result, mapData_.rows, mapData_.cols);
+            if (errorHandle(snap.board.empty(), "Empty board in GameResult for GameManager: ", gm_handle, gm_name)) { return; }
+            allResults.emplace_back(snap, gm_name);
         }
     
         lock_guard<mutex> lock(gmRegistrarmutex_);
@@ -370,14 +377,20 @@ bool ComparativeSimulator::errorHandle (bool condition ,const string& msg, void*
  * @return true if both results are identical, false otherwise.
  */
 bool ComparativeSimulator::sameResult(const SnapshotGameResult& a, const SnapshotGameResult& b) const {
-    // Check if the winners, reasons, and rounds are the same
-    if (a.winner != b.winner || a.reason != b.reason || a.rounds != b.rounds) {
+    if (a.winner != b.winner || a.reason != b.reason || a.rounds != b.rounds)
         return false;
-    }
-    // Check if the end map is the same
+
+    // Fast path: exact structural/content equality
+    if (a.board == b.board) return true;
+
+    auto norm = [](char c) constexpr { return c == '$' ? '#' : c; };
+
     if (a.board.size() != b.board.size()) return false;
     for (size_t y = 0; y < a.board.size(); ++y) {
-        if (a.board[y] != b.board[y]) return false;
+        if (a.board[y].size() != b.board[y].size()) return false;
+        for (size_t x = 0; x < a.board[y].size(); ++x) {
+            if (norm(a.board[y][x]) != norm(b.board[y][x])) return false;
+        }
     }
     return true;
 }
@@ -556,6 +569,3 @@ string ComparativeSimulator::BuildOutputBuffer(const string& mapPath,
 
     return oss.str();
 }
-
-
-

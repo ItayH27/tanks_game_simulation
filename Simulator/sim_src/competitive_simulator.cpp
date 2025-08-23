@@ -20,7 +20,6 @@ CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
     }
 
 CompetitiveSimulator::~CompetitiveSimulator() {
-    lock_guard<mutex> lock(handlesMutex_);
     for (auto& [path, handle] : algoPathToHandle_) {
         if (handle) {
             int result = dlclose(handle);
@@ -104,25 +103,23 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
     }
 
     try {
-    registrar.validateLast(); // REGISTER_GAME_MANAGER ran and set a factory
+        registrar.validateLast(); // REGISTER_GAME_MANAGER ran and set a factory
 
-    // Build a callable that looks up the entry by name and calls create(verbose)
-    gameManagerFactory_ = [soName, &registrar](bool verbose) -> std::unique_ptr<AbstractGameManager> {
-        for (auto it = registrar.begin(); it != registrar.end(); ++it) {
-            if (it->name() == soName) {
-                return it->create(verbose);
+        gameManagerFactory_ = [soName, &registrar](bool verbose) -> std::unique_ptr<AbstractGameManager> {
+            for (auto it = registrar.begin(); it != registrar.end(); ++it) {
+                if (it->name() == soName) {
+                    return it->create(verbose);
+                }
             }
-        }
-        throw std::runtime_error("GameManager not registered: " + soName);
-    };
-
-} catch (const std::exception& e) {
-    std::cerr << "Validation failed: " << e.what() << std::endl;
-    registrar.removeLast();
-    dlclose(gameManagerHandle_);
-    gameManagerHandle_ = nullptr;
-    return false;
-}
+            throw std::runtime_error("GameManager not registered: " + soName);
+        };
+    } catch (const std::exception& e) {
+        std::cerr << "Validation failed: " << e.what() << std::endl;
+        registrar.removeLast();
+        dlclose(gameManagerHandle_);
+        gameManagerHandle_ = nullptr;
+        return false;
+    }
 
     return true;
 }
@@ -177,38 +174,6 @@ bool CompetitiveSimulator::loadMaps(const string& folder, vector<fs::path>& outM
  *
  * @param maps List of map file paths to use in scheduling games.
  */
-// void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
-//     std::vector<std::string> algoNames;
-//     algoNames.reserve(algoNameToPath_.size());
-//     for (const auto& [name, _] : algoNameToPath_) algoNames.push_back(name);
-
-//     const size_t N = algoNames.size();
-//     const size_t R = N - 1;
-
-//     for (size_t k = 0; k < maps.size(); ++k) {
-//         const size_t r = k % R;
-//         const bool evenN_middle_round = (N % 2 == 0) && (r == N/2 - 1);
-
-//         for (size_t i = 0; i < N; ++i) {
-//             size_t j = (i + 1 + r) % N;
-            
-//             // Skip duplicate pairs (when j has already played against i)
-//             if (i >= j) continue;
-            
-//             // Schedule i vs j
-//             scheduledGames_.push_back({maps[k], algoNames[i], algoNames[j]});
-//             ++algoUsageCounts_[algoNames[i]];
-//             ++algoUsageCounts_[algoNames[j]];
-
-//             // Add mirror game unless it's the symmetric round
-//             if (!evenN_middle_round) {
-//                 scheduledGames_.push_back({maps[k], algoNames[j], algoNames[i]});
-//                 ++algoUsageCounts_[algoNames[i]];
-//                 ++algoUsageCounts_[algoNames[j]];
-//             }
-//         }
-//     }
-// }
 void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
     // Collect algo names in the container's natural iteration order (no sorting).
     std::vector<std::string> algoNames;
@@ -286,8 +251,7 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
 
     try {
         algoRegistrar_->validateLastRegistration();
-        algorithms_.push_back(make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(
-            algoRegistrar_->end()[-1]));
+        algorithms_.push_back(make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(algoRegistrar_->end()[-1]));
     } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
         {
             lock_guard<mutex> errLock(stderrMutex_);
