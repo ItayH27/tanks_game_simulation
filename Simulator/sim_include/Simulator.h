@@ -41,7 +41,6 @@ protected:
     bool verbose_;
     size_t numThreads_;
     utils::Logger& logger_;
-    std::mutex stderrMutex_;
 
     MapData readMap(const std::string& file_path);
     string timestamp();

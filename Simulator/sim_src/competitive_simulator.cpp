@@ -16,15 +16,17 @@
 
 CompetitiveSimulator::CompetitiveSimulator(bool verbose, size_t numThreads)
     : Simulator(verbose, numThreads) {
+        logger_.debug("CompetitiveSimulator initialized with verbosity=", verbose, ", threads=", numThreads);
         algoRegistrar_ = &AlgorithmRegistrar::getAlgorithmRegistrar();
     }
 
 CompetitiveSimulator::~CompetitiveSimulator() {
+    // Ensure algorithm objects are destroyed before unloading .so files
     for (auto& [path, handle] : algoPathToHandle_) {
         if (handle) {
             int result = dlclose(handle);
             if (result != 0) {
-                std::cerr << "Warning: dlclose failed for " << path << ": " << dlerror() << std::endl;
+                logger_.reportWarn("dlclose failed for ", path, ": ", dlerror());
             }
             handle = nullptr;
         }
@@ -34,10 +36,12 @@ CompetitiveSimulator::~CompetitiveSimulator() {
     if (gameManagerHandle_) {
         int result = dlclose(gameManagerHandle_);
         if (result != 0) {
-            std::cerr << "Warning: dlclose failed for game manager: " << dlerror() << std::endl;
+            logger_.reportWarn("dlclose failed for game manager: ", dlerror());
         }
         gameManagerHandle_ = nullptr;
     }
+
+    logger_.debug("CompetitiveSimulator destroyed, all .so handles closed.");
 }
 
 /**
@@ -55,30 +59,29 @@ int CompetitiveSimulator::run(const string& mapsFolder,
                               const string& gameManagerSoPath,
                               const string& algorithmsFolder) {
 
-    // Load gamemanager using .so path
+    logger_.info("Starting competitive simulation...");
     if (!loadGameManager(gameManagerSoPath)) {
         return 1;
     }
 
-    // Load algorithms using folder path
     if (!getAlgorithms(algorithmsFolder)) { // Make sure there are least 2 algorithms
-        cerr << "Usage: At least two algorithms must be present in folder: " << algorithmsFolder << endl;
+        logger_.reportError("At least two algorithms must be present in folder: ", algorithmsFolder);
         return 1;
     }
     for (auto& [name, _] : algoNameToPath_) { scores_[name] = 0; } // Zero out scores for all algorithms
 
-    // Load maps into vector
     vector<fs::path> maps;
     if (!loadMaps(mapsFolder, maps)) {
-        cerr << "Usage Error: No valid map files found in folder: " << mapsFolder << "\n"
-          << "Make sure the folder exists and contains at least one valid map file." << endl;
+        logger_.reportError("No valid map files found in folder: ", mapsFolder,
+                             "\nMake sure the folder exists and contains at least one valid map file.");
         return 1;
     }
 
-    scheduleGames(maps); // Scheduled all games to run
-    runGames(); // Run all games using threads
-    writeOutput(algorithmsFolder, mapsFolder, gameManagerSoPath); // Write the require output
+    scheduleGames(maps); 
+    runGames(); 
+    writeOutput(algorithmsFolder, mapsFolder, gameManagerSoPath); 
 
+    logger_.info("Competitive simulation completed.");
     return 0;
 }
 
@@ -92,12 +95,16 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
     auto absPath = fs::absolute(soPath);
     string soName = absPath.stem().string();
 
+    // Register the GameManager
     auto& registrar = GameManagerRegistrar::getGameManagerRegistrar();
+    logger_.debug("Registering GameManager: ", soName);
     registrar.createEntry(soName);
 
+    logger_.debug("Loading GameManager from: ", absPath.string());
     gameManagerHandle_ = dlopen(absPath.c_str(), RTLD_LAZY | RTLD_NODELETE);
     if (!gameManagerHandle_) {
-        std::cerr << "dlopen failed: " << absPath << ": " << dlerror() << std::endl;
+        logger_.reportError("Failed loading GameManager .so file from path: ", absPath.string(),
+                             "\n", dlerror());
         registrar.removeLast();
         return false;
     }
@@ -105,6 +112,7 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
     try {
         registrar.validateLast(); // REGISTER_GAME_MANAGER ran and set a factory
 
+        // Capture soName and registrar by reference to create the factory lambda
         gameManagerFactory_ = [soName, &registrar](bool verbose) -> std::unique_ptr<AbstractGameManager> {
             for (auto it = registrar.begin(); it != registrar.end(); ++it) {
                 if (it->name() == soName) {
@@ -114,13 +122,14 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
             throw std::runtime_error("GameManager not registered: " + soName);
         };
     } catch (const std::exception& e) {
-        std::cerr << "Validation failed: " << e.what() << std::endl;
+        logger_.reportError("Error validating GameManager registration for ", soName, ": ", e.what());
         registrar.removeLast();
         dlclose(gameManagerHandle_);
         gameManagerHandle_ = nullptr;
         return false;
     }
 
+    logger_.info("Successfully loaded GameManager: ", soName);
     return true;
 }
 
@@ -135,13 +144,15 @@ bool CompetitiveSimulator::loadGameManager(const string& soPath) {
 bool CompetitiveSimulator::getAlgorithms(const string& folder) {
     size_t soFound = 0;
 
+    // Iterate over all .so files in the folder
     for (const auto& entry : fs::directory_iterator(folder)) {
         if (entry.path().extension() == ".so") {
             const string soPath = entry.path().string();
             const string name = entry.path().stem().string();
+            logger_.debug("Found algorithm .so: ", soPath);
             
             algoNameToPath_[name] = soPath;
-            algoUsageCounts_[name] = 0;
+            algoUsageCounts_[name] = 0; // Initialize usage count
 
             ++soFound;
         }
@@ -161,9 +172,12 @@ bool CompetitiveSimulator::loadMaps(const string& folder, vector<fs::path>& outM
     // Iterate over all maps in folder and add them to maps vector
     for (const auto& entry : fs::directory_iterator(folder)) {
         if (entry.is_regular_file()) {
+            logger_.debug("Found map file: ", entry.path().string());
             outMaps.push_back(entry.path());
         }
     }
+
+    logger_.info("Found ", outMaps.size(), " map(s) in folder: ", folder);
     return !outMaps.empty();
 }
 
@@ -187,11 +201,13 @@ void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
 
     const size_t R = N - 1; // used for k % (N-1)
 
+    // Helper to create a unique key for an unordered pair (a,b) with a != b
     auto keyOf = [](uint32_t a, uint32_t b) -> uint64_t {
         if (a > b) std::swap(a, b);
         return (static_cast<uint64_t>(a) << 32) | b;
     };
 
+    // Schedule games according to the round-robin scheme
     for (size_t k = 0; k < maps.size(); ++k) {
         const auto& map = maps[k];
 
@@ -204,6 +220,8 @@ void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
 
             const uint64_t key = keyOf(i, j);
             if (seen.insert(key).second) {
+                logger_.debug("Scheduling game: ", algoNames[i], " vs. ", algoNames[j],
+                               " on map ", map.filename().string());
                 // Schedule one direction only (no mirroring).
                 scheduledGames_.push_back({ map, algoNames[i], algoNames[j] });
                 ++algoUsageCounts_[algoNames[i]];
@@ -211,6 +229,8 @@ void CompetitiveSimulator::scheduleGames(const std::vector<fs::path>& maps) {
             }
         }
     }
+
+    logger_.info("Scheduled ", scheduledGames_.size(), " game(s) across ", maps.size(), " map(s) and ", N, " algorithm(s).");
 }
 
 /**
@@ -236,14 +256,17 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
         throw std::runtime_error("Unknown algorithm: " + name);
     }
     const std::string& soPath = it->second;
-    if (algoPathToHandle_.count(soPath)) return;
+    if (algoPathToHandle_.count(soPath)) {
+        logger_.debug("Algorithm already loaded: ", name);
+        return;
+    }
 
     algoRegistrar_->createAlgorithmFactoryEntry(name);
 
+    logger_.debug("Loading algorithm from: ", soPath);
     void* handle = dlopen(soPath.c_str(), RTLD_LAZY | RTLD_NODELETE);
     if (!handle) {
         algoRegistrar_->removeLast();
-        std::lock_guard<std::mutex> errLock(stderrMutex_);
         throw std::runtime_error(std::string("Failed to load algorithm ") + soPath + ": " + dlerror());
     }
 
@@ -253,10 +276,9 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
         algoRegistrar_->validateLastRegistration();
         algorithms_.push_back(make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(algoRegistrar_->end()[-1]));
     } catch (const AlgorithmRegistrar::BadRegistrationException& e) {
-        {
-            lock_guard<mutex> errLock(stderrMutex_);
-            cerr << "Bad registration in " << name << ": " << e.name << endl;
-        }
+        logger_.reportError("Bad registration in ", name, ": ",
+                                "hasName=", e.hasName, ", hasPlayerFactory=", e.hasPlayerFactory,
+                                ", hasTankAlgorithmFactory=", e.hasTankAlgorithmFactory);
         algoRegistrar_->removeLast();
         dlclose(handle);
         algoPathToHandle_.erase(soPath);
@@ -264,6 +286,8 @@ void CompetitiveSimulator::ensureAlgorithmLoaded(const string& name) {
         algoUsageCounts_.erase(name);
         throw;
     }
+
+    logger_.info("Successfully loaded algorithm: ", name); 
 }
 
 /**
@@ -287,6 +311,8 @@ shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> CompetitiveSimulator
             return algo;
         }
     }
+
+    logger_.reportWarn("Algorithm not found in validated list: ", name);
     return nullptr;
 }
 
@@ -296,7 +322,8 @@ shared_ptr<AlgorithmRegistrar::AlgorithmAndPlayerFactories> CompetitiveSimulator
  * Creates multiple worker threads (up to the user-specified maximum) that process the game queue concurrently.
  */
 void CompetitiveSimulator::runGames() {
-    size_t threadCount = min(numThreads_, scheduledGames_.size());
+    size_t threadCount = min(numThreads_, scheduledGames_.size()); // Deciede number of threads to use based on scheduled games
+    logger_.info("Running games using ", threadCount, " thread(s)...");
     if (threadCount == 1) { // Main thread runs all games sequentially
         for (const auto& task : scheduledGames_) {
             runSingleGame(task); // Run all games sequentially if only one thread
@@ -310,10 +337,12 @@ void CompetitiveSimulator::runGames() {
     
     // Worker workflow
     auto worker = [&]() {
+        logger_.debug("Thread ", std::this_thread::get_id(), " started.");
         while (true) {
             size_t idx = nextTask.fetch_add(1, std::memory_order_relaxed);
             if (idx >= scheduledGames_.size()) break;
             runSingleGame(scheduledGames_[idx]);
+            logger_.debug("Thread ", std::this_thread::get_id(), " completed game ", idx + 1, "/", scheduledGames_.size());
         }
     };
 
@@ -323,8 +352,11 @@ void CompetitiveSimulator::runGames() {
     
     // Wait for all threads to finish working
     for (auto& t : workers) {
+        logger_.debug("Joining thread ", t.get_id());
         t.join();
     }
+
+    logger_.info("All games completed.");
 }
 
 /**
@@ -345,8 +377,7 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     fs::path mapPath = task.mapPath;
     MapData mapData = readMap(mapPath);
     if (mapData.failedInit) {
-        lock_guard<mutex> lock(stderrMutex_);
-        cerr << "Failed to load map: " << mapPath << endl;
+        logger_.reportWarn("Failed to load map: ", mapPath.string(), " - skipping game.");
         return;
     }
 
@@ -355,11 +386,12 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
     const string& name2 = task.algoName2;
 
     try {
+        // Load algorithms if not already loaded
         ensureAlgorithmLoaded(name1);
         ensureAlgorithmLoaded(name2);
     } catch (const exception& e) {
-        lock_guard<mutex> lock(stderrMutex_);
-        cerr << "Failed to load algorithm(s) for game on map: " << mapPath << "\n" << "Reason: " << e.what() << endl;
+        logger_.reportWarn("Failed to load algorithm(s) for game on map: ", mapPath.string(),
+                             " - skipping game.\nReason: ", e.what());
         return;
     }
 
@@ -368,9 +400,8 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         auto algo1 = getValidatedAlgorithm(name1);
         auto algo2 = getValidatedAlgorithm(name2);
         if (!algo1 || !algo2) {
-            lock_guard<mutex> lock(stderrMutex_);
-            cerr << "Error: Missing factories for one of the algorithms while running map: " << mapPath << "\n"
-                << "Algorithms: " << name1 << " vs. " << name2 << endl;
+            logger_.reportWarn("Missing factories for one of the algorithms while running map: ",
+                                mapPath.string(), " - skipping game.");
             return;
         }
 
@@ -381,10 +412,11 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         // Run game manager with players and factories
         auto gm = createGameManager();
         if (!gm) {
-            lock_guard<mutex> lock(stderrMutex_);
-            cerr << "Error: Failed to create game manager for map: " << mapPath << endl;
+            logger_.reportWarn("Failed to create game manager for map: ", mapPath.string());
             return;
         }
+        logger_.debug("Thread ", std::this_thread::get_id(), " running game: ",
+                   task.algoName1, " vs. ", task.algoName2, " on map ", task.mapPath);
         GameResult result = gm->run(mapData.cols, mapData.rows, *mapData.satelliteView, mapData.name,
             mapData.maxSteps, mapData.numShells,*player1, name1, *player2, name2,
             algo1->getTankAlgorithmFactory(),algo2->getTankAlgorithmFactory()
@@ -393,6 +425,8 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
 
         // Use GameResult to update scores
         bool tie = result.winner == 0;
+        logger_.info("Game completed: ", name1, " vs. ", name2, " on map ", mapPath.filename().string(),
+                     " - Result: ", tie ? "Tie" : (result.winner == 1 ? (name1 + " wins") : (name2 + " wins")));
         if (tie) {
             updateScore(name1, name2, true);
         } else if (result.winner == 1) {
@@ -402,6 +436,7 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
         }
     }
 
+    // Decrease usage count and unload algorithms if no longer needed
     decreaseUsageCount(name1);
     decreaseUsageCount(name2);
 }
@@ -417,6 +452,7 @@ void CompetitiveSimulator::runSingleGame(const GameTask& task) {
  */
 void CompetitiveSimulator::updateScore(const string& winner, const string& loser, bool tie) {
     lock_guard<mutex> lock(scoresMutex_); // Make sure score update is thread safe
+    logger_.debug("Updating score: ", winner, " vs. ", loser, tie ? " (tie)" : " (win/loss)");
     if (tie) {
         scores_[winner] += 1;
         scores_[loser] += 1;
@@ -437,18 +473,25 @@ void CompetitiveSimulator::updateScore(const string& winner, const string& loser
 void CompetitiveSimulator::writeOutput(const string& outFolder,
                                        const string& mapFolder,
                                        const string& gmSoPath) {
-    ofstream out(outFolder + "/competition_" + timestamp() + ".txt");
-    std::ostream& dest = out ? static_cast<std::ostream&>(out) : static_cast<std::ostream&>(cout);
+    // Create output file with timestamped name
+    string resultName = "competition_" + timestamp() + ".txt";
+    fs::path outPath = fs::path(outFolder) / resultName;
+    std::ofstream out(outPath.string());
+    std::ostream& dest = out ? static_cast<std::ostream&>(out) : static_cast<std::ostream&>(std::cout);
     if (!out) {
-        cerr << "Failed to open output file, printing to stdout instead." << endl;
+        logger_.reportWarn("Failed to open output file in folder: ", outFolder,
+                            " - printing results to stdout instead.");
     }
 
     dest << "game_maps_folder=" << mapFolder << "\n";
     dest << "game_manager=" << fs::path(gmSoPath).filename().string() << "\n\n";
 
+    // Sort scores in descending order and write to output
     vector<pair<string,int>> sorted(scores_.begin(), scores_.end());
     sort(sorted.begin(), sorted.end(), [](auto& a, auto& b){ return b.second < a.second; });
     for (auto& [name, score] : sorted) dest << name << " " << score << "\n";
+
+    logger_.info("Results written to ", out ? outPath.string() : "stdout");
 }
 
 /**
@@ -482,11 +525,14 @@ void CompetitiveSimulator::decreaseUsageCount(const std::string& algoName) {
 
     algoRegistrar_->eraseByName(algoName);
 
+    // Unload the .so file
     if (auto h = algoPathToHandle_.find(soPath); h != algoPathToHandle_.end()) {
+        logger_.debug("Unloading algorithm: ", algoName, " from path: ", soPath);
         dlclose(h->second);
         algoPathToHandle_.erase(h);
     }
 
+    // Clean up maps
     algoNameToPath_.erase(pathIt);
     algoUsageCounts_.erase(it);
 }

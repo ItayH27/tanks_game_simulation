@@ -34,14 +34,16 @@ static void configureLogger(const CmdParser::ParseResult& r) {
 
 int main(int argc, char** argv) {
     CmdParser::ParseResult result = CmdParser::parse(argc, argv);
+    configureLogger(result);
+    utils::Logger::get().debug("Command-line arguments parsed. Mode=", 
+                       result.mode == CmdParser::Mode::Comparative ? "Comparative" :
+                       result.mode == CmdParser::Mode::Competition  ? "Competition" : "None");
 
     if (!result.valid) {
-        std::cerr << "Error: " << result.errorMessage << "\n\n";
+        utils::Logger::get().reportError("Error parsing arguments:\n", result.errorMessage);
         CmdParser::printUsage();
         return 1;
     }
-
-    configureLogger(result);
 
     try {
         if (result.mode == CmdParser::Mode::Comparative) {
@@ -61,7 +63,7 @@ int main(int argc, char** argv) {
             );
         }
     } catch (const std::exception& error) {
-        std::cerr << "Fatal error during simulation: " << error.what() << "\n";
+        utils::Logger::get().reportError("Fatal error: ", error.what(), "\n");
         return 1;
     }
     
