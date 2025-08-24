@@ -10,7 +10,7 @@
 1. Create the build directory inside the root directory:
 ```bash
 cd 322542887_209277367
-cmake -B build
+cmake -B build -j
 ```
 
 2. From root directory, run Cmake:
