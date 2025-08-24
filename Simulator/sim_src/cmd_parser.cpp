@@ -3,6 +3,7 @@
 #include <cctype>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -119,6 +120,31 @@ namespace {
             std::cerr << "Number out of range: " << e.what() << std::endl;
             return false;
         }
+    }
+
+    // ==== small utils (add next to your existing helpers) ====
+    inline std::string absoluteForMsg(const std::string& p) {
+        std::error_code ec;
+        auto abs = fs::absolute(p, ec);
+        return ec ? p : abs.string();
+    }
+
+    // For files: exists + is_regular_file + readable (open)
+    inline bool isReadableFile(const std::string& path) {
+        std::error_code ec;
+        if (!fs::exists(path, ec) || !fs::is_regular_file(path, ec)) return false;
+        std::ifstream f(path, std::ios::in | std::ios::binary);
+        return static_cast<bool>(f);
+    }
+
+    // For folders: exists + is_directory + traversable + non-empty
+    inline bool isTraversableNonEmptyDir(const std::string& path) {
+        std::error_code ec;
+        if (!fs::exists(path, ec) || !fs::is_directory(path, ec)) return false;
+        // try to iterate at least one entry to prove traversal works
+        fs::directory_iterator it(path, ec);
+        if (ec) return false;                // cannot traverse
+        return it != fs::directory_iterator{};
     }
 
     // -------- Normalization of argv into switches and k=v pairs --------
@@ -263,12 +289,13 @@ namespace {
      * @param out ParseResult object to populate with extracted values.
      * @return A ParseResult object, marked valid if all checks pass, invalid otherwise.
      */
-    ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
+    ParseResult validateComparative(const std::unordered_map<std::string, std::string>& args,
+                                    ParseResult& out) {
         static const std::vector<std::string> required = {
             "game_map", "game_managers_folder", "algorithm1", "algorithm2"
         };
         for (const auto& k : required) {
-            if (args.find(k) == args.end()) return ParseResult::fail("Missing required argument: " + k);
+            if (!args.count(k)) return ParseResult::fail("Missing required argument: " + k);
         }
 
         out.gameMapFile        = args.at("game_map");
@@ -276,14 +303,15 @@ namespace {
         out.algorithm1File     = args.at("algorithm1");
         out.algorithm2File     = args.at("algorithm2");
 
-        if (!isFileValid(out.gameMapFile))
-            return ParseResult::fail("Invalid or missing file: " + out.gameMapFile);
-        if (!isFolderValid(out.gameManagersFolder))
-            return ParseResult::fail("Invalid folder: " + out.gameManagersFolder);
-        if (!isFileValid(out.algorithm1File))
-            return ParseResult::fail("Invalid or missing file: " + out.algorithm1File);
-        if (!isFileValid(out.algorithm2File))
-            return ParseResult::fail("Invalid or missing file: " + out.algorithm2File);
+        if (!isReadableFile(out.gameMapFile))
+            return ParseResult::fail("Invalid or unreadable file: " + absoluteForMsg(out.gameMapFile));
+        if (!isTraversableNonEmptyDir(out.gameManagersFolder))
+            return ParseResult::fail("Invalid or non-traversable folder (or empty): " +
+                                    absoluteForMsg(out.gameManagersFolder));
+        if (!isReadableFile(out.algorithm1File))
+            return ParseResult::fail("Invalid or unreadable file: " + absoluteForMsg(out.algorithm1File));
+        if (!isReadableFile(out.algorithm2File))
+            return ParseResult::fail("Invalid or unreadable file: " + absoluteForMsg(out.algorithm2File));
 
         out.valid = true;
         return out;
@@ -300,29 +328,32 @@ namespace {
      * @param out ParseResult object to populate with extracted values.
      * @return A ParseResult object, marked valid if all checks pass, invalid otherwise.
      */
-    ParseResult validateCompetition(const std::unordered_map<std::string, std::string>& args, ParseResult& out) {
+    ParseResult validateCompetition(const std::unordered_map<std::string, std::string>& args,
+                                    ParseResult& out) {
         static const std::vector<std::string> required = {
             "game_maps_folder", "game_manager", "algorithms_folder"
         };
         for (const auto& k : required) {
-            if (args.find(k) == args.end()) return ParseResult::fail("Missing required argument: " + k);
+            if (!args.count(k)) return ParseResult::fail("Missing required argument: " + k);
         }
 
         out.gameMapsFolder   = args.at("game_maps_folder");
         out.gameManagerFile  = args.at("game_manager");
         out.algorithmsFolder = args.at("algorithms_folder");
 
-        if (!isFolderValid(out.gameMapsFolder))
-            return ParseResult::fail("Invalid folder: " + out.gameMapsFolder);
-        if (!isFileValid(out.gameManagerFile))
-            return ParseResult::fail("Invalid file: " + out.gameManagerFile);
-        if (!isFolderValid(out.algorithmsFolder))
-            return ParseResult::fail("Invalid folder: " + out.algorithmsFolder);
+        if (!isTraversableNonEmptyDir(out.gameMapsFolder))
+            return ParseResult::fail("Invalid or non-traversable folder (or empty): " +
+                                    absoluteForMsg(out.gameMapsFolder));
+        if (!isReadableFile(out.gameManagerFile))
+            return ParseResult::fail("Invalid or unreadable file: " + absoluteForMsg(out.gameManagerFile));
+        if (!isTraversableNonEmptyDir(out.algorithmsFolder))
+            return ParseResult::fail("Invalid or non-traversable folder (or empty): " +
+                                    absoluteForMsg(out.algorithmsFolder));
 
         out.valid = true;
         return out;
     }
-} // namespace
+    } // namespace
 
 /**
  * @brief Parses command-line arguments and validates them according to mode.

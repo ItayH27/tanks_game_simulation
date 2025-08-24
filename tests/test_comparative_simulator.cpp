@@ -318,7 +318,7 @@ TEST_F(ComparativeSimulatorCerrTest, RunFailsOnBadMap) {
     std::string output = capture.str();
 
     EXPECT_EQ(rc, 1);
-    EXPECT_NE(output.find("Error: failed to load the map data."), std::string::npos);
+    EXPECT_NE(output.find("Failed to read map data"), std::string::npos);
 }
 
 // Test failed algorithm load
@@ -343,7 +343,7 @@ TEST_F(ComparativeSimulatorCerrTest, LoadGameManagerSONullRegistrar) {
     std::string output = capture.str();
 
     EXPECT_EQ(handle, nullptr);
-    EXPECT_NE(output.find("Error: Game manager registrar is null"), std::string::npos);
+    EXPECT_NE(output.find("Game manager registrar is null"), std::string::npos);
 
     sim.game_manager_registrar = old; // restore
 }
@@ -368,7 +368,7 @@ TEST_F(ComparativeSimulatorCerrTest, WriteOutputFileFail) {
     sim.writeOutput("map.txt", "algo1.so", "algo2.so", "/non/existent/folder");
 
     std::string output = capture.str();
-    EXPECT_NE(output.find("Error: failed to open output file."), std::string::npos);
+    EXPECT_NE(output.find("Failed to open output file"), std::string::npos);
 }
 
 // Test getGameManagers with empty folder
