@@ -25,7 +25,6 @@ The project includes a dockerfile allowing you to setup the game inside an isola
   (Note that in some shells you might need to replcae `$(PWD)` with `${PWD}`)
 
 
-
 After setting up the container, follow the instructions in [Building and Running the Game](BuildGuide.md).
 
 ---

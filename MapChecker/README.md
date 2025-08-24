@@ -15,11 +15,11 @@ It verifies that a map file strictly follows the **Assignment 2 map file format*
 - **Grid (from line 6):**
   Exactly `<Rows>` lines × `<Cols>` columns.  
   Only legal characters allowed:
-  - space → empty cell  
-  - `#` → wall  
-  - `@` → mine  
-  - `1` → tank (player 1)  
-  - `2` → tank (player 2)  
+  - space - empty cell  
+  - `#` - wall  
+  - `@` - mine  
+  - `1` - tank (player 1)  
+  - `2` - tank (player 2)  
 
 If the file is malformed, `mapcheck` prints detailed errors and warnings.
 
@@ -38,7 +38,7 @@ If the file is malformed, `mapcheck` prints detailed errors and warnings.
 
 ## Build
 ```bash
-cd mapcheck
+cd MapChecker
 cmake -B build
 cmake --build build -j
 ```
@@ -49,7 +49,6 @@ cmake --build build -j
 Validate a single map file:
 
 ```bash
-cd build
 ./mapcheck <map.txt> [--strict] [--json] [--write-normalized <out.txt>]
 ```
 
@@ -57,10 +56,13 @@ cd build
 Analyze one or more map files for content density:
 
 ```bash
-cd build
 ./mapcheck --stats <map1.txt> [<map2.txt> ...] [--csv > <stats.csv>]
 ```
 
 ## Notes
 - Normalized maps created with mapcheck are fully valid Assignment 2 map files and can be used directly in the simulator.
 - Use --stats --csv to quickly build a dataset of map characteristics for analysis.
+
+--- 
+
+[Back to Table of Contents](../README.md)

@@ -35,7 +35,7 @@ game_map=<game_map_filename>
 game_managers_folder=<game_managers_folder> 
 algorithm1=<algorithm_so_filename>
 algorithm2=<algorithm_so_filename> 
-[num_threads=<num>] [-verbose]
+[num_threads=<num>] [-verbose] [-logger] [-debug]
 ```
 
 Running the simulator in **competitive mode** from root directory:
@@ -44,7 +44,7 @@ Running the simulator in **competitive mode** from root directory:
 game_maps_folder=<game_maps_folder>
 game_manager=<game_manager_so_filename>
 algorithms_folder=<algorithms_folder>
-[num_threads=<num>] [-verbose]
+[num_threads=<num>] [-verbose] [-logger] [-debug]
 ```
 There are two optional arguments for each of the modes:
 - `num_threads` - sets the number of threads for the simulation as follows:

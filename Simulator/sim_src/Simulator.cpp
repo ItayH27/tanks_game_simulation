@@ -133,6 +133,8 @@ tuple<bool, int, int> Simulator::fillGameBoard(vector<vector<char>> &gameBoard, 
         if (i >= mapData.rows) {
             ++extraRows;
             hasErrors = true;
+            inputErrors << "Error recovered from: Missing " << extraRows
+                << " rows beyond declared height; padded with spaces.\n";
             continue;
         }
 
