@@ -18,70 +18,11 @@ The design emphasizes:
 - **Threaded execution** with user-controlled parallelism
 
 ---
-## Algorithm Implementation
+## Project Components
 
-The algorithm implementation consist two elements: `TankAlgorithm` and `Player.`
-
-### Tank Algorithm
-
-Each tank of the algorithm is driven by a decision system that controls movement, shooting, and reactions to battlefield events.
-
-In our implementation, we designed a tank that actively pursues the closest enemy using a BFS search. Its behavior follows these rules:
-- Recomputes the path to the nearest enemy every five turns.
-- Fires when the opponent is directly in its line of sight.
-- Evades incoming shells.
-- Shares internal state through the `BattleInfo` object.
-
-### Player
-
-The Player manages its tanks and processes satellite battlefield data.
-
-On `GetBattleInfo`, the `SatelliteView` is passed to the `Player`, which updates each tank’s `BattleInfo`.
-No pointers or references to the `SatelliteView` or `BattleInfo` are retained beyond their allowed lifetime.
-
-In our implementation, we created an **Observant player**: 
-- The player always reveals all the enemy tanks to his tanks, allowing them to choose thier target on their own.
-- The player passes the `Battleinfo` as is.
-
----
-GameManager Implementation
----
-## Automatic Registration
-
-The project uses automatic registration mechanism to allow `Simulator` to discover all `Player`, `TankAlgorithm` and `GameManager` implementations dynamically.
-
-Each component type (Player, TankAlgorithm, GameManager) has a registration struct and a macro provided in the `common/` headers.
-
-In the `Simulator` folder, we implemented **Registrar mechanism** to dynamically manage all loadable components: tanks algorithms, players and game managers.
-
-
-### Registration Macros
-- `REGISTER_TANK_ALGORITHM(MyTankAlgo)`  
-- `REGISTER_PLAYER(MyPlayer)`  
-- `REGISTER_GAME_MANAGER(MyGameManager)`   
-
-These macros automatically connect new implementations to the registrar during `.so` loading.
-
-### Usage Flow
-1. Simulator loads an `.so` file (via `dlopen`).
-2. Inside the `.so`, the macros `REGISTER_TANK_ALGORITHM`, `REGISTER_PLAYER`, or `REGISTER_GAME_MANAGER` are invoked, which make them to register themselves.
-3. The registrar validates the registration.  
-   - If valid → entry is kept and factories are available to the simulator.  
-   - If invalid → the entry is discarded and an exeption is raised.
-4. The simulator uses the factories to create algorithm and player instances for gameplay.
-
-This mechanism enables **modular, plug-and-play algorithms, players and game managers** without changing simulator code.
-
----
-
-## Threading Model
-
-The simulator supports parallel execution of tank games through threading.
-- Controlled via `num_threads` optional argument.
-- Single-threaded if `num_threads = 1` or if it's missing.
-- Multithreaded execution when `num_threads ≥ 2`, with main thread coordinating worker threads.
-- Threads run simulations in parallel; results are aggregated safely.
-- Locks are avoided when possible, but must be used when required.
+- [Algorithm Implementation](../Algorithm/README.md)
+- [GameManager Implementation](../GameManager/README.md)
+- [Simulator Implementation](../Simulator/README.md)
 
 ---
 
