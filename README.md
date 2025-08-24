@@ -19,6 +19,7 @@ A Multi-Threaded Tank Game Simulator in C++ that dynamically loads game managers
     - [Simulators Implementation](Simulator/README.md)
 - [Building and Running the Game](docs/BuildGuide.md)
 - Bonuses:
+    - Dynamic loading and unloading of .so files (in both comparative and competitive).
     - [Logger](docs/logger.md)
     - [Automatic tesitng (via Gtest)](tests/README.md)
     - [Using Docker Container](docs/Docker.md)
