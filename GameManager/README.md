@@ -7,10 +7,10 @@ Implements the full game loop (init → per-turn actions → termination), shell
 
 ## TL;DR
 
-- **API:** Implements `AbstractGameManager::run(...)` as required, including width/height, a read-only `SatelliteView` snapshot, players, and tank factories. :contentReference[oaicite:0]{index=0}  
-- **Packaging:** Build as a shared object named exactly `GameManager_209277367_322542887.so` inside a `GameManager/` project. :contentReference[oaicite:1]{index=1}  
-- **Auto-registration:** Uses `REGISTER_GAME_MANAGER(GM_209277367_322542887)` so the Simulator discovers it via the registrar. :contentReference[oaicite:2]{index=2}  
-- **Verbose logs:** When constructed with `verbose=true` (propagated from `-verbose` CLI), writes a per-turn log (Assignment 2 style). :contentReference[oaicite:3]{index=3}
+- **API:** Implements `AbstractGameManager::run(...)` as required, including width/height, a read-only `SatelliteView` snapshot, players, and tank factories.
+- **Packaging:** Build as a shared object named exactly `GameManager_209277367_322542887.so` inside a `GameManager/` project. 
+- **Auto-registration:** Uses `REGISTER_GAME_MANAGER(GM_209277367_322542887)` so the Simulator discovers it via the registrar. 
+- **Verbose logs:** When constructed with `verbose=true` (propagated from `-verbose` CLI), writes a per-turn log (Assignment 2 style). 
 
 ---
 
@@ -28,7 +28,7 @@ Implements the full game loop (init → per-turn actions → termination), shell
   - Empty: `' '`  
 
 ### Actions & validation
-- **Supported actions:** `MoveForward`, `MoveBackward`, `RotateLeft/Right 45°/90°`, `Shoot`, `GetBattleInfo`, `DoNothing`. (Matches the common enum.) :contentReference[oaicite:4]{index=4}  
+- **Supported actions:** `MoveForward`, `MoveBackward`, `RotateLeft/Right 45°/90°`, `Shoot`, `GetBattleInfo`, `DoNothing`. (Matches the common enum.)  
 - **Validity checks:**  
   - `isValidMove` rejects stepping into `#`/`$`.  
   - `isValidShoot` requires `ammo > 0` and `turnsToShoot == 0`.  
@@ -56,7 +56,7 @@ Implements the full game loop (init → per-turn actions → termination), shell
    - All tanks dead;  
    - `max_steps` reached;  
    - Both sides with zero shells for a prolonged period (40 turns here).  
-   Assigns `GameResult.winner`, `reason` (`ALL_TANKS_DEAD | MAX_STEPS | ZERO_SHELLS`), `remaining_tanks`, `gameState`, and `rounds`. :contentReference[oaicite:5]{index=5}
+   Assigns `GameResult.winner`, `reason` (`ALL_TANKS_DEAD | MAX_STEPS | ZERO_SHELLS`), `remaining_tanks`, `gameState`, and `rounds`.
 
 ---
 
@@ -69,7 +69,7 @@ Implements the full game loop (init → per-turn actions → termination), shell
 - **TTY colors (`printBoard`)**:
   - `'1'` bright blue, `'2'` green, `'#'` white, `'$'` gray, `'@'` red, `'*'` yellow, others default.
 
-> Note: Assignment 3 requires GameManager output files only if `-verbose` was passed to the Simulator; the Simulator should forward this to the GM constructor. :contentReference[oaicite:6]{index=6}
+> Note: Assignment 3 requires GameManager output files only if `-verbose` was passed to the Simulator; the Simulator should forward this to the GM constructor.
 
 ---
 
@@ -84,7 +84,7 @@ Implements the full game loop (init → per-turn actions → termination), shell
     using namespace GameManager_209277367_322542887;
     REGISTER_GAME_MANAGER(GM_209277367_322542887);
     ```
-  - The Simulator loads the `.so`, the registration code injects the factory into the registrar, and the Simulator constructs via `factory(verbose)` to call `run(...)`. :contentReference[oaicite:7]{index=7}
+  - The Simulator loads the `.so`, the registration code injects the factory into the registrar, and the Simulator constructs via `factory(verbose)` to call `run(...)`.
 
 - **Run signature (must match the common headers)**  
   ```cpp
