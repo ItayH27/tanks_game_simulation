@@ -1,0 +1,104 @@
+Bonuses:
+1. On Demand Module Managment - Loading and unloading .so files only when they are needed/no longer needed.
+    As it was written in the assignment: "In case you find a way to avoid loading algorithms / game_managers instances
+     simultaneously but rather load them (once!) only when needed and unload if not being used anymore (but without loading them again!) – you can ask for a bonus for that."
+
+     a. Comparative simulator:
+        1) In function runSingleGame, the function is run by a thread and loads the gm right before calling gm->run, and unloads its immidiatly after finishing the game. No pre loading of gms happens.
+
+    b. Competitive Simulator:
+        1) The algorithms are only mapped and not loaded until some thread runs a single game, where it calls 'ensureAlgorithmLoaded' that loads the algo, right before gm->run.
+        2) Maintaince usageCount for all mapped algo .so files - so files are unloaded immidiatly after the last game that uses them is done. Implemented via the 'decreaseUsageCount' function.
+        3) No pre-loading of algos.
+
+2. Logger - A lightweight logging utility for the Tank Game Simulator.
+    Supports multiple log levels (`info`, `warn`, `error`, `debug`) and can be enabled or disabled via command line flags.
+
+    - Thread-safe - safe to call from multiple worker threads in the simulator.  
+    - Configurable verbosity:
+        - Enable with `-logger`
+        - Show extra diagnostic details with `-debug`
+    - Log levels:
+        - `info` - lifecycle events and major milestones (simulation start/end, results written, winners).
+        - `warn` - recoverable issues (e.g., failed to create a single `GameManager`, fallback to stdout).
+        - `error` - hard failures that prevent progress (map load failure, `.so` load failure).
+        - `debug` - detailed per-thread and per-file information for development and troubleshooting.
+
+    - Example:
+        2025-08-24 07:59:26.351 INFO  [tid 140737466611648] Starting competitive simulation...
+        2025-08-24 07:59:26.353 DEBUG [tid 140737466611648] Loading GameManager from: /workspace/tanks_game_simulation 1_gm_so/GameManager_test_209277367_322542887.so
+        2025-08-24 07:59:26.357 INFO  [tid 140737466611648] Successfully loaded GameManager: GameManager_test_209277367_322542887
+
+    See more details in the logger.md...
+
+3. Automatic test based on GTest:
+    The project includes a comprehensive test suite using **Google Test** to ensure reliability and correctness of the game mechanics.
+
+    a. What we test:
+    - Command-line parsing (recognition of `-comparative` / `-competition`, required/optional args, `-verbose`)
+    - Error handling (missing arguments, duplicate keys, unsupported tokens, invalid paths/`num_threads`)
+    - Comparative simulator internals (result comparison, grouping identical outcomes, rendering final boards)
+    - Comparative simulator outputs (creation of `comparative_results_<time>.txt`, sorted groups, proper results)
+    - Competitive simulator internals (discovering algorithms, loading maps, scheduling games for odd/even N, updating scores)
+    - Competitive simulator outputs (creation of `competition_<time>.txt`, headers, sorted leaderboard)
+    - Error reporting (messages for failed map/algorithm loads, missing GameManagers, invalid output paths)
+
+
+    b. How to run test:
+        Way 1:
+        1) Make your way to the build directory (initialized during the CMake processes) by running:
+            'cd build'
+        2) Start the tests:
+            'ctest'
+
+
+4. Running the game in an isolated Docker container:
+    The project allows you to run the game inside and isolated Docker container using the dockerfile we provide.
+
+    a. Running the container:
+        1) Build the container:
+            docker build -t tanks-dev-x86_64 -f ../Dockerfile . .
+
+        2) Run the container:
+            docker run -it \
+            -v $(PWD):/workspace:cached \
+            -e LD_LIBRARY_PATH=/workspace/1_gm_so:/workspace/1_algo_so \
+            --workdir /workspace \
+            --user root \
+            tanks-dev-x86_64
+
+    b. After setting up the container, follow the building instructions in the README file
+
+5. Map Generator:
+    Contains two standalone utilities that extend the Tanks Game project:
+
+    a.  mapgen - Random Map Generator  
+            Generates valid Assignment-2/3 map files with customizable parameters.
+
+    b. mapdraw - Map Visualizer  
+        Renders existing map files either as ASCII (with optional colors) or as a BMP image.
+
+    Both tools are independent of the Simulator/GameManager/Algorithm builds.
+
+    Examples:
+        1) ./mapgen --rows 25 --cols 60 --max-steps 6000 --num-shells 30 \
+            --tanks1 3 --tanks2 3 --p-wall 0.08 --p-mine 0.02 \
+            --name "Medium Arena" --out medium_arena.txt
+         
+        2) ./mapdraw --in medium_arena.txt --bmp arena.bmp --cell 12
+
+    See more information in the MapGenerator/README.md...
+
+6. Map Checker:
+    A standalone map validator, normalizer, and statistics tool for the Tanks Game.
+    It verifies that a map file strictly follows the Assignment 2 map file format.
+
+    Examples:
+        1) ./mapcheck <map.txt> [--strict] [--json] [--write-normalized <out.txt>]
+
+        2) ./mapcheck --stats <map1.txt> [<map2.txt> ...] [--csv > <stats.csv>]
+
+    See more information in the MapChecker/README.md...
+
+
+
