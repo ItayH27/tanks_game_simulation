@@ -30,6 +30,8 @@ ComparativeSimulator::ComparativeSimulator(bool verbose, size_t numThreads)
         if (!game_manager_registrar) { // Should never happen
             throw std::runtime_error("Error: Failed to get GameManagerRegistrar instance.");
         }
+
+        logger_.debug("ComparativeSimulator initialized with verbose=", verbose_, ", numThreads=", numThreads_);
 }
 
 
@@ -55,6 +57,8 @@ ComparativeSimulator::~ComparativeSimulator() {
         }
     }
     algoHandles_.clear();
+
+    logger_.debug("ComparativeSimulator destroyed and resources cleaned up.");
 }
 
 /**
@@ -92,6 +96,7 @@ int ComparativeSimulator::run(const string& mapPath,
 
     // Verify that both algorithms have the required factories
     if (p1 == p2) { // Same .so file provided twice
+        logger_.info("Same algorithm .so file provided twice: ", algorithmSoPath1);
         algo1_ = std::make_shared<AlgorithmRegistrar::AlgorithmAndPlayerFactories>(*(algo_registrar->begin()));
         algo2_ = algo1_;  
     } else { // Different .so files
@@ -138,7 +143,7 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
         dlclose(probe); 
         return true;
     }
-    logger_.debug("Loading algorithm .so file: ", path);
+    
 
     // Register the algorithm entry
     if (!algo_registrar) {
@@ -149,6 +154,7 @@ bool ComparativeSimulator::loadAlgoSO(const string& path) {
     logger_.debug("Created algorithm entry for: ", soName);
     
     // Attempt to load the .so file
+    logger_.debug("Loading algorithm .so file: ", path);
     void* handle = dlopen(absPath.c_str(), RTLD_LAZY);
     if (!handle) {
         algo_registrar->removeLast(); //Rollback the last entry
@@ -279,6 +285,7 @@ void ComparativeSimulator::runGames() {
             if (idx >= gms_paths_.size()) return;
             gmPath = gms_paths_[idx];
             runSingleGame(gmPath); // Runs the scheduled game
+            logger_.debug("Thread ", std::this_thread::get_id(), " completed game with GameManager: ", gmPath.string());
         }
     };
 
@@ -445,6 +452,7 @@ void ComparativeSimulator::makeGroups(vector<pair<SnapshotGameResult, string>>& 
             }
         }
         if (!placed) { // Create a new group if not placed
+            logger_.debug("Creating new result group for GameManager: ", result.second);
             groups.push_back({ std::move(result.first), { result.second }, 1 });
         }
     }
@@ -491,6 +499,8 @@ void ComparativeSimulator::writeOutput(const string& mapPath,
     // Else, write the output buffer to the file
     outFile << outputBuffer;
     outFile.close();
+    
+    logger_.info("Results written to file: ", gmFolder + "/comparative_results_" + time +".txt");
 }
 
 /**

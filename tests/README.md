@@ -1,12 +1,9 @@
 # Testing
 
----
-
 The project provides an extensive Google Test suite to verify the accuracy and stability of the game logic.
 
 
-
-# What We Test
+## What We Test
 
 - **Command-line parsing**
   - Correct recognition of `-comparative` / `-competition`
