@@ -1,5 +1,0 @@
-Invalid-NoRows
-MaxSteps = 500
-NumShells=10
-Cols = 2
-12

@@ -1,5 +1,0 @@
-Map with no limits
-NumShells=10
-Rows = 1
-Cols = 2
-12

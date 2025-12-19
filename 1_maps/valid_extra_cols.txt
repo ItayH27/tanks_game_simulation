@@ -1,8 +1,0 @@
-Valid-ExtraCols
-MaxSteps = 500
-NumShells=10
-Rows = 3
-Cols = 3
-12 # 
-  # #
-2 1 #

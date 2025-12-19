@@ -1,9 +1,0 @@
-Valid-ExtraRows
-MaxSteps = 500
-NumShells=10
-Rows = 2
-Cols = 4
-1  2
-####
-#@ #
-2  1

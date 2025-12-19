@@ -1,6 +1,0 @@
-Invalid-NoCols
-MaxSteps = 500
-NumShells=10
-Rows = 2
-1
-2

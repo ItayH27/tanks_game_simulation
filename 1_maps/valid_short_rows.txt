@@ -1,8 +1,0 @@
-Valid-ShortRows
-MaxSteps = 500
-NumShells=10
-Rows = 3
-Cols = 6
-1 2
-#@ @#
-     
